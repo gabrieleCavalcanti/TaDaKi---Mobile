@@ -1,19 +1,27 @@
+import React, { useState } from "react";
 import {
   View,
   Text,
-  Button,
   Alert,
   TouchableOpacity,
   TextInput,
+  Image,
+  ImageBackground,
+  StyleSheet,
+  Dimensions,
+  KeyboardAvoidingView,
+  ScrollView,
+  Platform,
 } from "react-native";
-import { NativeStackScreenProps } from "@react-navigation/native-stack";
-import { RootStackParamList } from "../../../App";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { useNavigation } from "@react-navigation/native";
+
+import { RootStackParamList } from "../../../App";
 import api from "../../api/api";
-import { useState } from "react";
 
 type NavigationProps = NativeStackNavigationProp<RootStackParamList, "Login">;
+
+const { height } = Dimensions.get("window");
 
 export default function LoginScreen() {
   const navigation = useNavigation<NavigationProps>();
@@ -21,69 +29,20 @@ export default function LoginScreen() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
 
-  // async function entrar() {
-  //   if (!username.trim()) {
-  //     return Alert.alert("Erro", "Usuário é obrigatório");
-  //   }
-
-  //   if (!password.trim()) {
-  //     return Alert.alert("Erro", "Senha é obrigatória");
-  //   }
-
-  //   try {
-  //     const response = await api.post("/auth/login", {
-  //       username,
-  //       password: password,
-  //     });
-
-  //     // const token = response.data.data.token_acesso;
-
-  //     // console.log("TOKEN:", token);
-
-  //     Alert.alert("Sucesso", "Login realizado com sucesso");
-
-  //     navigation.navigate("Home");
-  //   } catch (error: any) {
-  //     console.log(error.response?.data);
-
-  //     console.log(error.response?.data);
-
-  //     if (error.response?.status === 401) {
-  //       return Alert.alert(
-  //         "Sessão inválida",
-  //         "Seu token é inválido ou expirou. Faça login novamente.",
-  //       );
-  //     }
-
-  //     Alert.alert("Erro", error.response?.data?.message || "Falha no login");
-  //   }
-  // }
-
   async function entrar() {
-    console.log("1 - Tentando fazer login...");
-    console.log("URL:", "/auth/login");
-    console.log("Username:", username);
-
     try {
-      console.log("2 - Enviando requisição...");
-
       const response = await api.post("/auth/login", {
         username: username.trim(),
         password,
       });
 
-      console.log("3 - RESPOSTA:", response.status);
-      console.log("4 - DATA:", response.data);
+      console.log("Login realizado:", response.status);
 
       Alert.alert("Sucesso", "Login realizado com sucesso");
 
       navigation.navigate("Home");
     } catch (error: any) {
-      console.log("========== ERRO ==========");
-      console.log("Mensagem:", error.message);
-      console.log("Status:", error.response?.status);
-      console.log("Resposta:", error.response?.data);
-      console.log("==========================");
+      console.log("Erro no login:", error.message);
 
       if (error.response?.status === 401) {
         return Alert.alert(
@@ -98,44 +57,241 @@ export default function LoginScreen() {
       );
     }
   }
+
   return (
-    <View>
-      <Text>Login</Text>
+    <ImageBackground
+      source={require("../../assets/fundoLogin.webp")}
+      style={styles.background}
+      resizeMode="cover"
+    >
+      {/* Fundo vermelho */}
+      <View style={styles.redBackground}>
+        <View style={styles.redCurve} />
 
-      <View>
-        <Text>Usuário:</Text>
-
-        <TextInput
-          placeholder="Usuário"
-          value={username}
-          onChangeText={setUsername}
+        <Image
+          source={require("../../assets/fundoLoginLoja.webp")}
+          style={styles.backgroundLoja}
+          resizeMode="contain"
         />
       </View>
 
-      <View>
-        <Text>Senha:</Text>
+      {/* Ajusta a tela quando o teclado abre */}
+      <KeyboardAvoidingView
+        style={styles.keyboardContainer}
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+      >
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Card de Login */}
+          <View style={styles.card}>
+            {/* Logo */}
+            <Image
+              source={require("../../assets/logoTaDaKi.webp")}
+              style={styles.logo}
+              resizeMode="contain"
+            />
 
-        <TextInput
-          placeholder="Insira a senha"
-          secureTextEntry
-          value={password}
-          onChangeText={setPassword}
-        />
-      </View>
+            {/* Usuário */}
+            <View style={styles.inputContainer}>
+              <Text style={styles.label}>Usuário</Text>
 
-      {/* <Button
-        title="Entrar"
-        onPress={() => navigation.navigate("Home")}
-      /> */}
+              <TextInput
+                style={styles.input}
+                value={username}
+                onChangeText={setUsername}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+            </View>
 
-      <TouchableOpacity onPress={entrar}>
-        <Text>ENTRAR</Text>
-      </TouchableOpacity>
+            {/* Senha */}
+            <View style={styles.inputContainer}>
+              <Text style={styles.label}>Senha:</Text>
 
-      <Button
-        title="Criar conta"
-        onPress={() => navigation.navigate("Cadastro")}
-      />
-    </View>
+              <TextInput
+                style={styles.input}
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry
+              />
+
+              <TouchableOpacity
+                style={styles.forgotButton}
+                onPress={() => {
+                  // futuramente colocar recuperação de senha
+                }}
+              >
+                <Text style={styles.forgotText}>
+                  Esqueci minha senha
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Botão Entrar */}
+            <TouchableOpacity
+              style={styles.loginButton}
+              onPress={entrar}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.loginButtonText}>Entrar</Text>
+            </TouchableOpacity>
+
+            {/* Cadastro */}
+            <TouchableOpacity
+              onPress={() => navigation.navigate("Cadastro")}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.registerText}>Cadastre-se</Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </ImageBackground>
   );
 }
+
+const styles = StyleSheet.create({
+  background: {
+    flex: 1,
+    backgroundColor: "#75080A",
+  },
+
+  keyboardContainer: {
+    flex: 1,
+  },
+
+  scrollContent: {
+    flexGrow: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    paddingVertical: 20,
+  },
+
+  backgroundLoja: {
+    position: "absolute",
+
+    width: 1080,
+    height: 580,
+
+    left: -180,
+    bottom: 10,
+  },
+
+  redBackground: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+
+    height: height * 0.48,
+
+    backgroundColor: "#75080A",
+  },
+
+  redCurve: {
+    position: "absolute",
+
+    width: "170%",
+    height: 300,
+
+    left: "-65%",
+    top: -100,
+
+    backgroundColor: "#75080A",
+
+    borderRadius: 1000,
+  },
+
+  card: {
+    width: "90%",
+    minHeight: height * 0.55,
+
+    backgroundColor: "rgba(255, 255, 255, 0.78)",
+
+    borderRadius: 55,
+
+    paddingHorizontal: 28,
+    paddingTop: 18,
+    paddingBottom: 25,
+
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  logo: {
+    width: 210,
+    height: 85,
+
+    marginBottom: 20,
+  },
+
+  inputContainer: {
+    width: "100%",
+    marginBottom: 14,
+  },
+
+  label: {
+    fontSize: 14,
+    color: "#222",
+
+    marginLeft: 10,
+    marginBottom: 7,
+  },
+
+  input: {
+    width: "100%",
+    height: 43,
+
+    backgroundColor: "#fff",
+
+    borderRadius: 25,
+
+    paddingHorizontal: 18,
+
+    fontSize: 15,
+    color: "#333",
+  },
+
+  loginButton: {
+    width: "100%",
+    height: 42,
+
+    backgroundColor: "#75080A",
+
+    borderRadius: 25,
+
+    justifyContent: "center",
+    alignItems: "center",
+
+    marginTop: 10,
+  },
+
+  loginButtonText: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "500",
+  },
+
+  forgotButton: {
+    alignSelf: "flex-end",
+
+    marginTop: 3,
+    marginRight: 8,
+  },
+
+  forgotText: {
+    color: "#ee1c1c",
+    fontSize: 11,
+  },
+
+  registerText: {
+    color: "#75080A",
+
+    fontSize: 16,
+
+    marginTop: 35,
+  },
+});

@@ -14,7 +14,6 @@ export function cleanHistory(raw: unknown, now = Date.now()): Consumption[] {
 export function addConsumption(history: Consumption[], post: Post, kind: Consumption["kind"], now = Date.now()) {
   return cleanHistory([...history.filter(item => item.post !== post.id_post || item.kind !== kind), {post: post.id_post, organization: post.id_organizacao, category: post.id_categoria, kind, at: now}], now);
 }
-// A street or neighborhood is comparable only within the same city AND state.
 export function proximity(user: Address[], business: Address[]): number {
   if (!user.length || !business.length) return 5;
   let result = 5;
@@ -48,12 +47,11 @@ export function recommendations(posts: Post[], likes: Set<number>, favorites: Fa
   }
   const hasInterests = orgs.size > 0 || cats.size > 0;
   const score = (post: Post) => (orgs.get(Number(post.id_organizacao)) ?? 0) + (cats.get(Number(post.id_categoria)) ?? 0);
-  const data = posts.filter(post => !personalized || !hasInterests || score(post) > 0).slice().sort((a,b) => proximity(locations.user, locations.organizations[a.id_organizacao] ?? []) - proximity(locations.user, locations.organizations[b.id_organizacao] ?? []) || score(b) - score(a) || Number(b.id_post) - Number(a.id_post));
+  const group = (post: Post) => personalized && hasInterests && score(post) <= 0 ? 1 : 0;
+  const data = posts.slice().sort((a, b) => group(a) - group(b) || proximity(locations.user, locations.organizations[a.id_organizacao] ?? []) - proximity(locations.user, locations.organizations[b.id_organizacao] ?? []) || score(b) - score(a) || Number(b.id_post) - Number(a.id_post));
   return { posts: data, hasInterests };
 }
 
-// Only query the authenticated user's address and businesses present in this feed.
-// Four workers cap concurrency; absent addresses never prevent the feed from loading.
 export async function loadLocations(userId: number, posts: Post[], request: (personId: number) => Promise<Address[]>, active: () => boolean = () => true): Promise<Locations> {
   const ids = [...new Set([userId, ...posts.map(p => p.id_pessoa_organizacao ?? 0)].filter(id => id > 0))];
   const byPerson = new Map<number, Address[]>(); let cursor = 0;

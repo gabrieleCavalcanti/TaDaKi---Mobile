@@ -16,6 +16,7 @@ export function useFeed(onUnauthorized: () => void) {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [favoritesError, setFavoritesError] = useState(false);
+  const [favoriteErrors, setFavoriteErrors] = useState<Record<number, string>>({});
   const [pending, setPending] = useState<Set<string>>(new Set());
   const generation = useRef(0);
   const locks = useRef(new Set<string>());
@@ -229,6 +230,7 @@ export function useFeed(onUnauthorized: () => void) {
   const toggleFavorite = async (orgId: number) => {
     const key = `favorite:${orgId}`;
     if (!lock(key)) return;
+    setFavoriteErrors(previous => ({ ...previous, [orgId]: "" }));
     try {
       const existing = favorites[orgId];
       let entry;
@@ -258,7 +260,9 @@ export function useFeed(onUnauthorized: () => void) {
         return next;
       });
     } catch (cause) {
-      setNotice(apiError(cause));
+      const message = apiError(cause);
+      setNotice(message);
+      setFavoriteErrors(previous => ({ ...previous, [orgId]: message }));
     } finally {
       unlock(key);
     }
@@ -271,6 +275,7 @@ export function useFeed(onUnauthorized: () => void) {
     counts,
     favorites,
     favoritesError,
+    favoriteErrors,
     loading,
     refreshing,
     error,

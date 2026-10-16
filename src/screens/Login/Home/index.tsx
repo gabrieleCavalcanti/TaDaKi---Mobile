@@ -1,5 +1,5 @@
 import { useIsFocused } from "@react-navigation/native";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
   FlatList,
@@ -12,9 +12,10 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import type { NativeStackNavigationProp, NativeStackScreenProps } from "@react-navigation/native-stack";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
+import type { ViewToken } from "react-native";
 import type { RootStackParamList } from "../../../App";
 import api, { imageUrl } from "../../api/api";
 import { removerTokens } from "../../storage/authStorage";
@@ -27,8 +28,9 @@ import { proximity, proximityLabels } from "./recommendations";
 import { MenuReveal, useReducedMotion } from "./motion";
 import { colors, styles as s } from "./styles";
 import PostCard from "./PostCard";
-import CreatePostModal from "./CreatePostModal";
-export default function FeedScreen({
+import CreatePostModal from "../../components/CreatePostModal";
+import LoadingScreen from "../../components/LoadingScreen";
+export function FeedScreen({
   navigation,
   onlyLikes = false,
   initialFavorites = false,
@@ -47,6 +49,7 @@ export default function FeedScreen({
       navigation.reset({ index: 0, routes: [{ name: "Login" }] }),
     );
   }, [navigation]);
+  // Busca os posts e as informações da conta.
   const feed = useFeed(unauthorized);
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState(0);
@@ -54,9 +57,14 @@ export default function FeedScreen({
   const [menu, setMenu] = useState(false);
   const [composer, setComposer] = useState(false);
   const [image, setImage] = useState<Post | null>(null);
-  const [personal, setPersonal] = useState(false);
   const [imageFailed, setImageFailed] = useState(false);
   const [explore, setExplore] = useState(false);
+  const [visiblePosts, setVisiblePosts] = useState<Set<number>>(new Set());
+  const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 5 }).current;
+  // Anima os posts que chegam à tela.
+  const onViewableItemsChanged = useRef(({ viewableItems }: { viewableItems: ViewToken<Post>[] }) => {
+    setVisiblePosts(new Set(viewableItems.map(entry => entry.item.id_post)));
+  }).current;
   const discovery = useDiscovery(
     Number(feed.person?.id_pessoa ?? feed.person?.id_pessoa_login ?? 0),
     feed.posts,
@@ -64,7 +72,6 @@ export default function FeedScreen({
     feed.favorites,
     !explore && !onlyLikes && !favoritesOnly && !search.trim() && !category,
   );
-
   useEffect(() => {
     setFavoritesOnly(initialFavorites);
   }, [initialFavorites]);
@@ -73,7 +80,6 @@ export default function FeedScreen({
       setMenu(false);
       setComposer(false);
       setImage(null);
-      setPersonal(false);
     }
   }, [focused]);
   const type = userType(feed.person);
@@ -110,10 +116,7 @@ export default function FeedScreen({
   const Header = (
     <View>
       {onlyLikes && (
-        <TouchableOpacity
-          onPress={() => navigation.popTo("Home", { favoritos: false })}
-          style={{ padding: 16 }}
-        >
+        <TouchableOpacity onPress={() => navigation.popTo("Home")} style={{ padding: 16 }}>
           <Text style={s.textButton}>← Voltar para o feed</Text>
         </TouchableOpacity>
       )}
@@ -145,12 +148,7 @@ export default function FeedScreen({
                 setFavoritesOnly(false);
               }}
             >
-              <Text
-                style={[
-                  s.chipText,
-                  !explore && !favoritesOnly && s.chipActiveText,
-                ]}
-              >
+              <Text style={[ s.chipText, !explore && !favoritesOnly && s.chipActiveText, ]}>
                 Para você
               </Text>
             </TouchableOpacity>
@@ -162,21 +160,12 @@ export default function FeedScreen({
                 setFavoritesOnly(false);
               }}
             >
-              <Text
-                style={[
-                  s.chipText,
-                  explore && !favoritesOnly && s.chipActiveText,
-                ]}
-              >
+              <Text style={[ s.chipText, explore && !favoritesOnly && s.chipActiveText, ]}>
                 Explorar
               </Text>
             </TouchableOpacity>
             {canFavorite && (
-              <TouchableOpacity
-                style={[s.chip, favoritesOnly && s.chipActive]}
-                accessibilityState={{ selected: favoritesOnly }}
-                onPress={() => setFavoritesOnly(true)}
-              >
+              <TouchableOpacity style={[s.chip, favoritesOnly && s.chipActive]} accessibilityState={{ selected: favoritesOnly }} onPress={() => setFavoritesOnly(true)}>
                 <Text style={[s.chipText, favoritesOnly && s.chipActiveText]}>
                   Favoritas
                 </Text>
@@ -199,10 +188,7 @@ export default function FeedScreen({
                       ? `Região escolhida: ${discovery.selectedAddress.municipio} / ${discovery.selectedAddress.uf}.`
                       : "Perto do seu endereço cadastrado: rua, bairro, cidade e estado."}
               </Text>
-              <RegionPicker
-                initial={discovery.locations.user[0]}
-                save={discovery.saveReference}
-              />
+              <RegionPicker initial={discovery.locations.user[0]} save={discovery.saveReference} />
               {!explore && !favoritesOnly && !discovery.hasInterests && (
                 <Text style={s.helper}>
                   Curta produtos, amplie fotos ou visite empresas para
@@ -215,49 +201,20 @@ export default function FeedScreen({
       )}
       <View style={s.search}>
         <Ionicons name="search" size={19} color={colors.muted} />
-        <TextInput
-          style={s.input}
-          value={search}
-          onChangeText={setSearch}
-          placeholder="Buscar produto, empresa ou categoria"
-          accessibilityLabel="Buscar publicações"
-        />
+        <TextInput style={s.input} value={search} onChangeText={setSearch} placeholder="Buscar produto, empresa ou categoria" accessibilityLabel="Buscar publicações" />
         {search && (
-          <TouchableOpacity
-            onPress={() => setSearch("")}
-            accessibilityLabel="Limpar busca"
-            style={{ padding: 5 }}
-          >
+          <TouchableOpacity onPress={() => setSearch("")} accessibilityLabel="Limpar busca" style={{ padding: 5 }}>
             <Ionicons name="close" size={20} color={colors.muted} />
           </TouchableOpacity>
         )}
       </View>
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={s.filters}
-      >
-        <TouchableOpacity
-          style={[s.chip, !category && s.chipActive]}
-          onPress={() => setCategory(0)}
-        >
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={s.filters}>
+        <TouchableOpacity style={[s.chip, !category && s.chipActive]} onPress={() => setCategory(0)}>
           <Text style={[s.chipText, !category && s.chipActiveText]}>Todas</Text>
         </TouchableOpacity>
         {feed.categories.map((item) => (
-          <TouchableOpacity
-            key={item.id_categoria}
-            style={[
-              s.chip,
-              category === Number(item.id_categoria) && s.chipActive,
-            ]}
-            onPress={() => setCategory(Number(item.id_categoria))}
-          >
-            <Text
-              style={[
-                s.chipText,
-                category === Number(item.id_categoria) && s.chipActiveText,
-              ]}
-            >
+          <TouchableOpacity key={item.id_categoria} style={[ s.chip, category === Number(item.id_categoria) && s.chipActive, ]} onPress={() => setCategory(Number(item.id_categoria))}>
+            <Text style={[ s.chipText, category === Number(item.id_categoria) && s.chipActiveText, ]}>
               {item.descricao}
             </Text>
           </TouchableOpacity>
@@ -266,12 +223,8 @@ export default function FeedScreen({
       {feed.notice && (
         <View style={s.notice}>
           <Text style={s.noticeText}>{feed.notice}</Text>
-          <TouchableOpacity
-            onPress={() => feed.setNotice("")}
-            accessibilityLabel="Fechar aviso"
-            style={{ padding: 7 }}
-          >
-            <Ionicons name="close" size={20} color="#6E572C" />
+          <TouchableOpacity onPress={() => feed.setNotice("")} accessibilityLabel="Fechar aviso" style={{ padding: 7 }}>
+            <Ionicons name="close" size={20} color={colors.ink} />
           </TouchableOpacity>
         </View>
       )}
@@ -286,11 +239,7 @@ export default function FeedScreen({
     </View>
   ) : (
     <View style={s.state}>
-      <Ionicons
-        name={(feed.error || timelineError) ? "cloud-offline-outline" : "heart-outline"}
-        size={44}
-        color={colors.brand}
-      />
+      <Ionicons name={(feed.error || timelineError) ? "cloud-offline-outline" : "heart-outline"} size={44} color={colors.brand} />
       <Text style={s.stateTitle}>
         {(feed.error || timelineError)
           ? "Não foi possível carregar"
@@ -314,7 +263,7 @@ export default function FeedScreen({
         style={s.primary}
         onPress={() => {
           if (feed.error || timelineError) void feed.load();
-          else if (onlyLikes) navigation.popTo("Home", { favoritos: false });
+          else if (onlyLikes) navigation.popTo("Home");
           else {
             setSearch("");
             setCategory(0);
@@ -333,34 +282,20 @@ export default function FeedScreen({
       </TouchableOpacity>
     </View>
   );
+  if (feed.loading) return <LoadingScreen reduced={reduced} />;
   return (
     <SafeAreaView style={s.page} edges={["top", "bottom"]}>
       <View style={s.header}>
-        <TouchableOpacity
-          accessibilityLabel="Página inicial"
-          onPress={() => navigation.popTo("Home", { favoritos: false })}
-        >
-          <Image
-            source={require("../../assets/logoTaDaKi.webp")}
-            style={s.logo}
-            resizeMode="contain"
-          />
+        <TouchableOpacity accessibilityLabel="Página inicial" onPress={() => navigation.popTo("Home")}>
+          <Image source={require("../../assets/logoTaDaKi.webp")} style={s.logo} resizeMode="contain" />
         </TouchableOpacity>
         <View style={s.row}>
           {canCreate && !onlyLikes && (
-            <TouchableOpacity
-              style={[s.iconButton, s.createButton]}
-              onPress={() => setComposer(true)}
-              accessibilityLabel="Criar publicação"
-            >
+            <TouchableOpacity style={[s.iconButton, s.createButton]} onPress={() => setComposer(true)} accessibilityLabel="Criar publicação">
               <Ionicons name="add" size={25} color="white" />
             </TouchableOpacity>
           )}
-          <TouchableOpacity
-            style={s.iconButton}
-            onPress={() => setMenu(true)}
-            accessibilityLabel="Abrir menu"
-          >
+          <TouchableOpacity style={s.iconButton} onPress={() => setMenu(true)} accessibilityLabel="Abrir menu">
             <Ionicons name="menu" size={24} color={colors.ink} />
           </TouchableOpacity>
         </View>
@@ -383,18 +318,15 @@ export default function FeedScreen({
         initialNumToRender={4}
         maxToRenderPerBatch={4}
         windowSize={7}
+        viewabilityConfig={viewabilityConfig}
+        onViewableItemsChanged={onViewableItemsChanged}
         renderItem={({ item }) => (
           <View>
             {!onlyLikes &&
               !favoritesOnly &&
               !discovery.locating &&
               discovery.locations.user.length > 0 && (
-                <Text
-                  style={[
-                    s.helper,
-                    { paddingHorizontal: 16, paddingVertical: 8 },
-                  ]}
-                >
+                <Text style={[ s.helper, { paddingHorizontal: 16, paddingVertical: 8 }, ]}>
                   {
                     proximityLabels[
                       proximity(
@@ -415,11 +347,13 @@ export default function FeedScreen({
                 feed.favorites[item.id_organizacao]?.favoritado,
               )}
               canFavorite={canFavorite}
+              favoriteError={feed.favoriteErrors[item.id_organizacao]}
               pendingLike={feed.pending.has(`like:${item.id_post}`)}
               pendingFavorite={feed.pending.has(
                 `favorite:${item.id_organizacao}`,
               )}
               reduced={reduced}
+              visible={visiblePosts.has(item.id_post)}
               onLike={() => void feed.toggleLike(item.id_post)}
               onFavorite={() => void feed.toggleFavorite(item.id_organizacao)}
               onProfile={() => {
@@ -438,25 +372,13 @@ export default function FeedScreen({
           </View>
         )}
       />
-      <Modal
-        visible={focused && menu}
-        transparent
-        animationType={reduced ? "none" : "fade"}
-        onRequestClose={() => setMenu(false)}
-      >
+      <Modal visible={focused && menu} transparent animationType={reduced ? "none" : "fade"} onRequestClose={() => setMenu(false)}>
         <Pressable style={s.menuBackdrop} onPress={() => setMenu(false)}>
           <MenuReveal open={focused && menu} reduced={reduced}>
-          <Pressable
-            style={s.menu}
-            onPress={(event) => event.stopPropagation()}
-          >
+          <Pressable style={s.menu} onPress={(event) => event.stopPropagation()}>
             <View style={s.row}>
               <Text style={s.menuTitle}>Seu TaDaKi</Text>
-              <TouchableOpacity
-                style={s.iconButton}
-                onPress={() => setMenu(false)}
-                accessibilityLabel="Fechar menu"
-              >
+              <TouchableOpacity style={s.iconButton} onPress={() => setMenu(false)} accessibilityLabel="Fechar menu">
                 <Ionicons name="close" size={24} color={colors.ink} />
               </TouchableOpacity>
             </View>
@@ -483,29 +405,19 @@ export default function FeedScreen({
               style={s.menuItem}
               onPress={() => {
                 setMenu(false);
-                if (canCreate && feed.person?.id_pessoa)
-                  navigation.navigate("Perfil", {
-                    id_pessoa: feed.person.id_pessoa,
-                  });
-                else setPersonal(true);
+                // Abre o perfil que já existe no aplicativo.
+                const id = Number(feed.person?.id_pessoa ?? feed.person?.id_pessoa_login);
+                if (Number.isSafeInteger(id) && id > 0) {
+                  navigation.navigate("Perfil", { id_pessoa: id });
+                } else feed.setNotice("Não foi possível identificar seu perfil. Atualize o feed.");
               }}
             >
               <Ionicons name="person-outline" size={20} color={colors.ink} />
               <Text style={s.menuText}>Meu perfil</Text>
             </TouchableOpacity>
             {canCreate && (
-              <TouchableOpacity
-                style={s.menuItem}
-                onPress={() => {
-                  setMenu(false);
-                  navigation.navigate("Dashboard");
-                }}
-              >
-                <Ionicons
-                  name="stats-chart-outline"
-                  size={20}
-                  color={colors.ink}
-                />
+              <TouchableOpacity style={s.menuItem} onPress={() => { setMenu(false); navigation.navigate("Dashboard"); }}>
+                <Ionicons name="stats-chart-outline" size={20} color={colors.ink} />
                 <Text style={s.menuText}>Dashboard</Text>
               </TouchableOpacity>
             )}
@@ -537,16 +449,7 @@ export default function FeedScreen({
               </TouchableOpacity>
             )}
             <Text style={s.menuSection}>CONTA</Text>
-            <TouchableOpacity
-              style={s.menuItem}
-              onPress={() => {
-                setMenu(false);
-                void api
-                  .post("/auth/logout")
-                  .catch(() => {})
-                  .finally(unauthorized);
-              }}
-            >
+            <TouchableOpacity style={s.menuItem} onPress={() => { setMenu(false); void api .post("/auth/logout") .catch(() => {}) .finally(unauthorized); }}>
               <Ionicons name="log-out-outline" size={20} color={colors.brand} />
               <Text style={[s.menuText, { color: colors.brand }]}>
                 Sair da conta
@@ -557,18 +460,9 @@ export default function FeedScreen({
           </MenuReveal>
         </Pressable>
       </Modal>
-      <Modal
-        visible={focused && Boolean(image)}
-        transparent
-        animationType={reduced ? "none" : "fade"}
-        onRequestClose={() => setImage(null)}
-      >
+      <Modal visible={focused && Boolean(image)} transparent animationType={reduced ? "none" : "fade"} onRequestClose={() => setImage(null)}>
         <SafeAreaView style={s.imageBackdrop}>
-          <TouchableOpacity
-            style={s.fullImageClose}
-            onPress={() => setImage(null)}
-            accessibilityLabel="Fechar imagem"
-          >
+          <TouchableOpacity style={s.fullImageClose} onPress={() => setImage(null)} accessibilityLabel="Fechar imagem">
             <Ionicons name="close-circle" size={38} color="white" />
           </TouchableOpacity>
           {imageFailed ? (
@@ -576,57 +470,22 @@ export default function FeedScreen({
               Não foi possível abrir esta imagem.
             </Text>
           ) : (
-            <Image
-              source={{ uri: imageUrl(image?.vincularImagem) }}
-              style={s.fullImage}
-              resizeMode="contain"
-              onError={() => setImageFailed(true)}
-            />
+            <Image source={{ uri: imageUrl(image?.vincularImagem) }} style={s.fullImage} resizeMode="contain" onError={() => setImageFailed(true)} />
           )}
           <Text style={s.fullImageTitle}>{image?.titulo}</Text>
         </SafeAreaView>
       </Modal>
-      <Modal
-        visible={focused && personal}
-        transparent
-        animationType={reduced ? "none" : "fade"}
-        onRequestClose={() => setPersonal(false)}
-      >
-        <Pressable style={s.menuBackdrop} onPress={() => setPersonal(false)}>
-          <Pressable
-            style={s.menu}
-            onPress={(event) => event.stopPropagation()}
-          >
-            <View style={s.row}>
-              <Text style={s.menuTitle}>Meu perfil</Text>
-              <TouchableOpacity
-                style={s.iconButton}
-                onPress={() => setPersonal(false)}
-                accessibilityLabel="Fechar perfil"
-              >
-                <Ionicons name="close" size={23} />
-              </TouchableOpacity>
-            </View>
-            <Text style={s.postTitle}>
-              {feed.person?.nome || feed.person?.username}
-            </Text>
-            <Text style={s.description}>Conta de cliente</Text>
-            <Text style={s.helper}>
-              Suas curtidas e empresas favoritas ficam no menu da Home.
-            </Text>
-          </Pressable>
-        </Pressable>
-      </Modal>
       {canCreate && !onlyLikes && (
-        <CreatePostModal
-          open={focused && composer}
-          close={() => setComposer(false)}
-          person={feed.person}
-          categories={feed.categories}
-          onPublished={onPublished}
-          reduced={reduced}
-        />
+        <CreatePostModal open={focused && composer} close={() => setComposer(false)} person={feed.person} categories={feed.categories} onPublished={onPublished} reduced={reduced} />
       )}
     </SafeAreaView>
+  );
+}
+export default function HomeScreen({
+  navigation,
+  route,
+}: NativeStackScreenProps<RootStackParamList, "Home">) {
+  return (
+    <FeedScreen navigation={navigation} initialFavorites={Boolean(route.params?.favoritos)} />
   );
 }

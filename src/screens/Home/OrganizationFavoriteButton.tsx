@@ -54,7 +54,7 @@ export default function OrganizationFavoriteButton({ personId }: { personId: num
   if (!client && !error) return null;
   return <View style={{ gap: 8, marginVertical: 10 }}>
     <TouchableOpacity style={[s.social, s.favoriteAction]} accessibilityRole="button" accessibilityState={{ selected: Boolean(favoriteId), disabled: busy }} disabled={busy} onPress={() => void (orgId ? toggle() : load())}>
-      <Ionicons name={favoriteId ? "star" : "star-outline"} size={20} color="#557B5D" />
+      <Ionicons name={favoriteId ? "star" : "star-outline"} size={20} color="#252D36" />
       <Text style={s.socialText}>{busy ? "Carregando…" : !orgId && error ? "Tentar novamente" : favoriteId ? "Organização favorita" : "Favoritar organização"}</Text>
     </TouchableOpacity>
     {error ? <Text accessibilityRole="alert" style={{ color: "#B03636", fontSize: 12 }}>{error}</Text> : null}

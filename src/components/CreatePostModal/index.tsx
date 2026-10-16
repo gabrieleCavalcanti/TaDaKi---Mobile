@@ -12,29 +12,24 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as ImagePicker from "expo-image-picker";
 import * as ImageManipulator from "expo-image-manipulator";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import api, { apiError } from "../../api/api";
 import { colors, styles as s } from "./styles";
-import type { Category, Person } from "./model";
+import type { CreatePostModalProps } from "./types";
+export type { CreatePostModalProps, PostCategory, PostOrganization } from "./types";
 export default function CreatePostModal({
   open,
   close,
   person,
   categories,
   onPublished,
-  reduced,
-}: {
-  open: boolean;
-  close: () => void;
-  person: Person | null;
-  categories: Category[];
-  onPublished: () => Promise<void>;
-  reduced: boolean;
-}) {
+  reduced = false,
+  onSubmit,
+}: CreatePostModalProps) {
   const [step, setStep] = useState(0);
   const [uri, setUri] = useState("");
   const [title, setTitle] = useState("");
@@ -48,6 +43,7 @@ export default function CreatePostModal({
   const publishLock = useRef(false);
   const draftKey = `tadaki:draft:${person?.id_organizacao ?? 0}`;
   const [draftReady, setDraftReady] = useState("");
+  // Guarda o texto para continuar depois.
   useEffect(() => {
     let active = true;
     setDraftReady("");
@@ -59,7 +55,7 @@ export default function CreatePostModal({
         setDescription(saved.description || "");
         setCategory(Number(saved.category) || 0);
       } catch {
-        /* ignore corrupt draft */
+        /* Um rascunho inválido não impede criar outro post. */
       }
       setDraftReady(draftKey);
     });
@@ -74,6 +70,7 @@ export default function CreatePostModal({
         JSON.stringify({ title, description, category }),
       );
   }, [draftKey, draftReady, step, title, description, category]);
+  // Escolhe uma foto ou abre a câmera.
   const chooseImage = async (crop = false, camera = false) => {
     if (pickerLock.current) return;
     pickerLock.current = true;
@@ -117,7 +114,7 @@ export default function CreatePostModal({
               },
             ]
           : [];
-      // Normalize HEIC and other gallery formats to the JPEG format accepted by this API.
+      // Prepara a foto antes de enviar.
       const prepared = await ImageManipulator.manipulateAsync(
         asset.uri,
         resize,
@@ -131,6 +128,7 @@ export default function CreatePostModal({
       pickerLock.current = false;
     }
   };
+  // Confere os campos e publica o post.
   const publish = async () => {
     if (publishLock.current) return;
     setError("");
@@ -162,20 +160,28 @@ export default function CreatePostModal({
           name: "produto.jpg",
           type: "image/jpeg",
         } as unknown as Blob);
-      await api.post(
-        "/posts",
-        data,
-        Platform.OS === "web"
-          ? {}
-          : { headers: { "Content-Type": "multipart/form-data" } },
-      );
+      if (onSubmit) {
+        await onSubmit(data);
+      } else {
+        await api.post(
+          "/posts",
+          data,
+          Platform.OS === "web"
+            ? {}
+            : { headers: { "Content-Type": "multipart/form-data" } },
+        );
+      }
       await AsyncStorage.removeItem(draftKey);
       setTitle("");
       setDescription("");
       setCategory(0);
       setUri("");
       setStep(2);
-      await onPublished();
+      try {
+        await onPublished?.();
+      } catch {
+        setError("O post foi publicado, mas não foi possível atualizar a lista. Atualize a tela ao voltar.");
+      }
     } catch (cause) {
       setError(apiError(cause));
     } finally {
@@ -183,46 +189,33 @@ export default function CreatePostModal({
       publishLock.current = false;
     }
   };
+  const handleClose = () => {
+    if (busy || picking) return;
+    if (step === 2) setStep(0);
+    close();
+  };
   return (
-    <Modal
-      visible={open}
-      animationType={reduced ? "none" : "slide"}
-      onRequestClose={() => {
-        if (!busy && !picking) close();
-      }}
-      presentationStyle="fullScreen"
-    >
-      <SafeAreaView style={[s.page, { backgroundColor: "white" }]}>
+    <Modal visible={open} animationType={reduced ? "none" : "slide"} onRequestClose={handleClose} presentationStyle="fullScreen">
+      {/* Mantém os botões fora da câmera e da barra do aparelho. */}
+      <SafeAreaProvider>
+      <SafeAreaView style={s.page} edges={["top", "right", "bottom", "left"]}>
         <View style={s.composerHeader}>
           <TouchableOpacity
             disabled={busy || picking}
-            onPress={() => (step === 1 ? setStep(0) : close())}
+            onPress={() => (step === 1 ? setStep(0) : handleClose())}
             accessibilityLabel={
               step === 1 ? "Voltar para imagem" : "Fechar criação de publicação"
             }
             style={s.iconButton}
           >
-            <Ionicons
-              name={step === 1 ? "arrow-back" : "close"}
-              size={23}
-              color={colors.ink}
-            />
+            <Ionicons name={step === 1 ? "arrow-back" : "close"} size={23} color={colors.ink} />
           </TouchableOpacity>
-          <Text style={s.composerTitle}>
+          <Text style={s.composerTitle} numberOfLines={1}>
             {step === 2 ? "Publicado!" : "Nova publicação"}
           </Text>
           {step !== 2 ? (
-            <TouchableOpacity
-              style={{ padding: 12 }}
-              disabled={busy || picking || (step === 0 && !uri)}
-              onPress={() => (step === 0 ? setStep(1) : void publish())}
-            >
-              <Text
-                style={[
-                  s.accent,
-                  (busy || picking || (step === 0 && !uri)) && s.disabled,
-                ]}
-              >
+            <TouchableOpacity style={s.nextButton} disabled={busy || picking || (step === 0 && !uri)} onPress={() => (step === 0 ? setStep(1) : void publish())}>
+              <Text style={[ s.accent, (busy || picking || (step === 0 && !uri)) && s.disabled, ]}>
                 {busy ? "Enviando…" : step === 0 ? "Avançar" : "Publicar"}
               </Text>
             </TouchableOpacity>
@@ -232,34 +225,19 @@ export default function CreatePostModal({
         </View>
         {step === 2 ? (
           <View style={s.success}>
-            <Ionicons
-              name="checkmark-circle-outline"
-              size={75}
-              color="#557B5D"
-            />
+            <Ionicons name="checkmark-circle-outline" size={75} color={colors.blue} />
             <Text style={s.stateTitle}>Seu negócio está no feed</Text>
             <Text style={s.stateCopy}>
               Sua publicação já pode ser descoberta pela comunidade.
             </Text>
-            <TouchableOpacity
-              style={s.primary}
-              onPress={() => {
-                setStep(0);
-                close();
-              }}
-            >
+            {error ? <Text style={s.error} accessibilityRole="alert">{error}</Text> : null}
+            <TouchableOpacity style={s.primary} onPress={handleClose}>
               <Text style={s.primaryText}>Voltar para o feed</Text>
             </TouchableOpacity>
           </View>
         ) : (
-          <KeyboardAvoidingView
-            style={{ flex: 1 }}
-            behavior={Platform.OS === "ios" ? "padding" : "height"}
-          >
-            <ScrollView
-              contentContainerStyle={s.composerContent}
-              keyboardShouldPersistTaps="handled"
-            >
+          <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : "height"}>
+            <ScrollView contentContainerStyle={s.composerContent} keyboardShouldPersistTaps="handled">
               <Text style={s.stepText}>
                 {step === 0
                   ? "1. Foto do produto"
@@ -267,43 +245,20 @@ export default function CreatePostModal({
               </Text>
               {uri ? (
                 <>
-                  <Image
-                    source={{ uri }}
-                    resizeMode="contain"
-                    style={[s.preview, step === 1 && s.previewSmall]}
-                  />
-                  <View
-                    style={[
-                      s.row,
-                      {
-                        justifyContent: "center",
-                        marginTop: 12,
-                        flexWrap: "wrap",
-                      },
-                    ]}
-                  >
-                    <TouchableOpacity
-                      disabled={busy || picking}
-                      onPress={() => void chooseImage(false)}
-                    >
+                  <Image source={{ uri }} resizeMode="contain" style={[s.preview, step === 1 && s.previewSmall]} />
+                  <View style={[ s.row, { justifyContent: "center", marginTop: 12, flexWrap: "wrap", }, ]}>
+                    <TouchableOpacity disabled={busy || picking} onPress={() => void chooseImage(false)}>
                       <Text style={s.textButton}>Trocar foto</Text>
                     </TouchableOpacity>
                     {Platform.OS !== "web" && (
-                      <TouchableOpacity
-                        disabled={busy || picking}
-                        onPress={() => void chooseImage(true)}
-                      >
+                      <TouchableOpacity disabled={busy || picking} onPress={() => void chooseImage(true)}>
                         <Text style={s.textButton}>Selecionar com recorte</Text>
                       </TouchableOpacity>
                     )}
                   </View>
                 </>
               ) : (
-                <TouchableOpacity
-                  style={s.upload}
-                  disabled={picking}
-                  onPress={() => void chooseImage()}
-                >
+                <TouchableOpacity style={s.upload} disabled={picking} onPress={() => void chooseImage()}>
                   <Ionicons name="images-outline" size={60} color="#637A8E" />
                   <Text style={s.uploadTitle}>
                     A próxima descoberta começa aqui
@@ -327,10 +282,7 @@ export default function CreatePostModal({
                 {cameraBlocked && Platform.OS !== "web" && <TouchableOpacity disabled={busy || picking} onPress={() => {void Linking.openSettings().catch(() => setError("Abra as configurações do aparelho e permita a câmera para o TaDaKi."));}}><Text style={s.textButton}>Abrir configurações</Text></TouchableOpacity>}
               </View>
               {picking && (
-                <ActivityIndicator
-                  color={colors.brand}
-                  style={{ marginTop: 15 }}
-                />
+                <ActivityIndicator color={colors.brand} style={{ marginTop: 15 }} />
               )}
               {step === 1 && (
                 <>
@@ -348,14 +300,7 @@ export default function CreatePostModal({
                     </View>
                   </View>
                   <Text style={s.label}>Produto ou serviço</Text>
-                  <TextInput
-                    style={s.field}
-                    value={title}
-                    onChangeText={setTitle}
-                    maxLength={150}
-                    placeholder="Ex.: Bolo de chocolate artesanal"
-                    editable={!busy}
-                  />
+                  <TextInput style={s.field} value={title} onChangeText={setTitle} maxLength={150} placeholder="Ex.: Bolo de chocolate artesanal" editable={!busy} />
                   <Text style={s.counter}>{title.length}/150</Text>
                   <Text style={s.label}>Descrição</Text>
                   <TextInput
@@ -387,13 +332,7 @@ export default function CreatePostModal({
                           selected: category === Number(item.id_categoria),
                         }}
                       >
-                        <Text
-                          style={[
-                            s.chipText,
-                            category === Number(item.id_categoria) &&
-                              s.chipActiveText,
-                          ]}
-                        >
+                        <Text style={[ s.chipText, category === Number(item.id_categoria) && s.chipActiveText, ]}>
                           {item.descricao}
                         </Text>
                       </TouchableOpacity>
@@ -416,15 +355,13 @@ export default function CreatePostModal({
                 </Text>
               )}
               {busy && (
-                <ActivityIndicator
-                  color={colors.brand}
-                  style={{ marginTop: 20 }}
-                />
+                <ActivityIndicator color={colors.brand} style={{ marginTop: 20 }} />
               )}
             </ScrollView>
           </KeyboardAvoidingView>
         )}
       </SafeAreaView>
+      </SafeAreaProvider>
     </Modal>
   );
 }

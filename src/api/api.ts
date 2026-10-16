@@ -34,21 +34,20 @@ api.interceptors.response.use(
       throw error;
     config._retried = true;
     const refreshToken = await pegarRefreshToken();
-    if (!refreshToken) throw error;
     if (!refreshing)
       refreshing = api
-        .post("/auth/refresh", { refreshToken })
+        .post("/auth/refresh", refreshToken ? { refreshToken } : {})
         .then(async (response) => {
-          // This backend refreshes an httpOnly cookie and does not return a JSON access token.
+          // Renova a sessão para continuar usando o aplicativo.
           if (response.data.token_acesso)
-            await salvarTokens(response.data.token_acesso, refreshToken);
+            await salvarTokens(response.data.token_acesso, response.data.refresh_token ?? refreshToken ?? "");
           else await AsyncStorage.removeItem("@TaDaKi:access_token");
         })
         .finally(() => {
           refreshing = null;
         });
     await refreshing;
-    delete config.headers.Authorization;
+    config.headers.delete("Authorization");
     return api(config);
   },
 );

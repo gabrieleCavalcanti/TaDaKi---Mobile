@@ -22,9 +22,11 @@ export function useReducedMotion() {
 export function Reveal({
   children,
   reduced,
+  visible = true,
 }: {
   children: ReactNode;
   reduced: boolean;
+  visible?: boolean;
 }) {
   const progress = useRef(new Animated.Value(reduced ? 1 : 0)).current;
   useEffect(() => {
@@ -33,14 +35,15 @@ export function Reveal({
       return;
     }
     progress.setValue(0);
+    if (!visible) return;
     const animation = Animated.timing(progress, {
       toValue: 1,
-      duration: 260,
+      duration: 420,
       useNativeDriver: Platform.OS !== "web",
     });
     animation.start();
     return () => animation.stop();
-  }, [progress, reduced]);
+  }, [progress, reduced, visible]);
   return (
     <Animated.View
       style={{
@@ -49,7 +52,7 @@ export function Reveal({
           {
             translateY: progress.interpolate({
               inputRange: [0, 1],
-              outputRange: [6, 0],
+              outputRange: [18, 0],
             }),
           },
         ],

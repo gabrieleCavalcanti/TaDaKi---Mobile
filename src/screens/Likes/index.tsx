@@ -1,6 +1,6 @@
 import type { NativeStackScreenProps } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../../../App";
-import FeedScreen from "../Home/FeedScreen";
+import { FeedScreen } from "../Home";
 export default function LikesScreen({
   navigation,
 }: NativeStackScreenProps<RootStackParamList, "Likes">) {

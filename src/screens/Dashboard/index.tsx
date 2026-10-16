@@ -1,4 +1,7 @@
 import { useEffect, useState } from "react";
+import { Ionicons } from "@expo/vector-icons";
+import { Reveal, useReducedMotion } from "../Home/motion";
+import { dashboardStyles as d } from "./styles";
 import {
   ActivityIndicator,
   Image,
@@ -19,6 +22,7 @@ import { currentMonth, monthLabel, shiftMonth } from "./model";
 export default function Dashboard({
   navigation,
 }: NativeStackScreenProps<RootStackParamList, "Dashboard">) {
+  const reduced = useReducedMotion();
   const [person, setPerson] = useState<Person | null>(null);
   const [checking, setChecking] = useState(true);
   const [authError, setAuthError] = useState("");
@@ -53,177 +57,47 @@ export default function Dashboard({
     Number(person?.id_pessoa ?? person?.id_pessoa_login ?? 0),
   );
   const data = dashboard.data;
+  // Mostra os resultados do mês escolhido.
+  const metrics = data ? [
+    { label: "Pessoas que curtiram", value: data.pessoas_curtiram, copy: "Pessoas únicas no mês.", icon: "people-outline" as const },
+    { label: "Curtidas no mês", value: data.curtidas_mes, copy: "Curtidas do período ainda ativas.", icon: "heart-outline" as const },
+    { label: "Organização nos favoritos", value: data.pessoas_favoritaram_total, copy: "Total atual de clientes que favoritaram.", icon: "star-outline" as const },
+    { label: "Novos favoritos no mês", value: data.novos_favoritos_mes, copy: "Favoritos ativos com data registrada.", icon: "calendar-outline" as const },
+  ] : [];
   return (
-    <SafeAreaView style={s.page}>
-      <ScrollView contentContainerStyle={{ padding: 20, paddingBottom: 50 }}>
-        <TouchableOpacity
-          style={{ paddingVertical: 12 }}
-          onPress={() => navigation.popTo("Home", { favoritos: false })}
-        >
-          <Text style={s.textButton}>← Voltar para a Home</Text>
+    <View style={s.page}>
+      <ScrollView contentContainerStyle={d.content}>
+        <TouchableOpacity style={s.row} onPress={() => navigation.popTo("Home", { favoritos: false })}>
+          <Ionicons name="arrow-back" size={20} color={colors.ink} /><Text style={s.textButton}>Voltar para o feed</Text>
         </TouchableOpacity>
-        <Text style={s.eyebrow}>RESULTADOS DO SEU NEGÓCIO</Text>
-        <Text style={s.title}>Dashboard</Text>
-        <Text style={s.subtitle}>
-          Acompanhe a relação da comunidade com seus produtos.
-        </Text>
-        <View
-          style={[
-            s.row,
-            { justifyContent: "space-between", marginVertical: 20 },
-          ]}
-        >
-          <TouchableOpacity
-            style={s.iconButton}
-            accessibilityLabel="Mês anterior"
-            disabled={dashboard.month <= "2000-01"}
-            onPress={() => dashboard.setMonth(shiftMonth(dashboard.month, -1))}
-          >
-            <Text>‹</Text>
-          </TouchableOpacity>
-          <Text style={{ fontWeight: "700", color: colors.ink }}>
-            {monthLabel(dashboard.month)}
-          </Text>
-          <TouchableOpacity
-            style={s.iconButton}
-            accessibilityLabel="Próximo mês"
-            disabled={dashboard.month >= currentMonth()}
-            onPress={() => dashboard.setMonth(shiftMonth(dashboard.month, 1))}
-          >
-            <Text>›</Text>
-          </TouchableOpacity>
+        <Reveal reduced={reduced}><View style={d.hero}>
+          <Text style={d.eyebrow}>RESULTADOS DO SEU NEGÓCIO</Text>
+          <Text style={d.title}>Seu negócio, em números.</Text>
+          <Text style={d.copy}>Acompanhe quem interage com seus posts e mantém sua organização por perto.</Text>
+        </View></Reveal>
+        <View style={d.period}>
+          <TouchableOpacity style={s.iconButton} accessibilityLabel="Mês anterior" disabled={dashboard.month <= "2000-01"} onPress={() => dashboard.setMonth(shiftMonth(dashboard.month, -1))}><Ionicons name="chevron-back" size={20} color={colors.ink} /></TouchableOpacity>
+          <Text style={d.month}>{monthLabel(dashboard.month)}</Text>
+          <TouchableOpacity style={[s.iconButton, dashboard.month >= currentMonth() && { opacity: 0.4 }]} accessibilityLabel="Próximo mês" disabled={dashboard.month >= currentMonth()} onPress={() => dashboard.setMonth(shiftMonth(dashboard.month, 1))}><Ionicons name="chevron-forward" size={20} color={colors.ink} /></TouchableOpacity>
         </View>
-        {checking || dashboard.loading ? (
-          <ActivityIndicator
-            color={colors.brand}
-            accessibilityLabel="Carregando resultados"
-          />
-        ) : authError || dashboard.error ? (
-          <View>
-            <Text style={s.error}>{authError || dashboard.error}</Text>
-            <TouchableOpacity
-              style={s.primary}
-              onPress={() =>
-                authError ? setAttempt((a) => a + 1) : dashboard.refresh()
-              }
-            >
-              <Text style={s.primaryText}>Tentar novamente</Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          data && (
-            <>
-              {[
-                [
-                  "Pessoas que curtiram no mês",
-                  data.pessoas_curtiram,
-                  "Cada pessoa é contada uma vez, mesmo curtindo vários posts.",
-                ],
-                [
-                  "Curtidas no mês",
-                  data.curtidas_mes,
-                  "Curtidas que continuam ativas no período.",
-                ],
-                [
-                  "Pessoas que favoritaram",
-                  data.pessoas_favoritaram_total,
-                  "Total atual de clientes que favoritaram sua empresa.",
-                ],
-                [
-                  "Novos favoritos no mês",
-                  data.novos_favoritos_mes,
-                  "Favoritos com data conhecida que continuam ativos.",
-                ],
-              ].map(([label, value, copy]) => (
-                <View
-                  key={String(label)}
-                  style={{
-                    backgroundColor: "white",
-                    borderWidth: 1,
-                    borderColor: colors.line,
-                    borderRadius: 16,
-                    padding: 20,
-                    marginBottom: 12,
-                  }}
-                >
-                  <Text style={s.orgName}>{label}</Text>
-                  <Text
-                    style={{
-                      fontSize: 38,
-                      fontWeight: "800",
-                      color: colors.brand,
-                      marginVertical: 8,
-                    }}
-                  >
-                    {value}
-                  </Text>
-                  <Text style={s.helper}>{copy}</Text>
-                </View>
-              ))}
-              <View
-                style={{
-                  backgroundColor: "white",
-                  borderWidth: 1,
-                  borderColor: colors.line,
-                  borderRadius: 16,
-                  padding: 20,
-                  marginTop: 10,
-                }}
-              >
-                <Text style={s.stateTitle}>Post mais curtido no mês</Text>
-                {data.post_mais_curtido ? (
-                  <>
-                    {data.post_mais_curtido.vincularImagem && (
-                      <Image
-                        style={{
-                          height: 180,
-                          width: "100%",
-                          marginVertical: 15,
-                        }}
-                        resizeMode="contain"
-                        source={{
-                          uri: imageUrl(data.post_mais_curtido.vincularImagem),
-                        }}
-                      />
-                    )}
-                    <Text style={s.postTitle}>
-                      {data.post_mais_curtido.titulo}
-                    </Text>
-                    <Text style={s.description}>
-                      {data.post_mais_curtido.curtidas} curtidas no período
-                    </Text>
-                    {data.post_mais_curtido.status === "ARQUIVADO" && (
-                      <Text style={s.helper}>Publicação arquivada</Text>
-                    )}
-                  </>
-                ) : (
-                  <Text style={s.description}>
-                    Nenhum post recebeu curtidas neste mês.
-                  </Text>
-                )}
-              </View>
-              {data.favoritos_sem_data > 0 && (
-                <Text style={[s.helper, { marginTop: 16 }]}>
-                  {data.favoritos_sem_data} pessoas têm favoritos antigos sem
-                  data registrada. Elas entram no total atual, mas não nos novos
-                  favoritos do mês.
-                </Text>
-              )}
-              <Text style={[s.helper, { marginTop: 16 }]}>
-                Os resultados consideram curtidas e favoritos que continuam
-                ativos. Datas seguem o calendário configurado no banco de dados.
-                Em caso de empate, aparece o post mais recente.
-              </Text>
-              <TouchableOpacity
-                style={[s.primary, { marginTop: 20 }]}
-                onPress={dashboard.refresh}
-              >
-                <Text style={s.primaryText}>Atualizar métricas</Text>
-              </TouchableOpacity>
-            </>
-          )
-        )}
+        {checking || dashboard.loading ? <ActivityIndicator color={colors.brand} accessibilityLabel="Carregando resultados" /> : authError || dashboard.error ? <View><Text style={s.error} accessibilityRole="alert">{authError || dashboard.error}</Text><TouchableOpacity style={s.primary} onPress={() => authError ? setAttempt(a => a + 1) : dashboard.refresh()}><Text style={s.primaryText}>Tentar novamente</Text></TouchableOpacity></View> : data && <>
+          <View style={d.grid}>{metrics.map(metric => <View style={d.metric} key={metric.label}>
+            <View style={d.icon}><Ionicons name={metric.icon} size={22} color={colors.ink} /></View>
+            <Text style={d.metricLabel}>{metric.label}</Text><Text style={d.number}>{metric.value.toLocaleString("pt-BR")}</Text><Text style={d.copy}>{metric.copy}</Text>
+          </View>)}</View>
+          <Reveal reduced={reduced}><View style={d.best}>
+            <View style={d.bestHeader}><View style={d.icon}><Ionicons name="trophy-outline" size={22} color={colors.ink} /></View><View style={{ flex: 1 }}><Text style={d.eyebrow}>DESTAQUE DO PERÍODO</Text><Text style={d.bestTitle}>Seu post mais curtido</Text></View></View>
+            {data.post_mais_curtido ? <>
+              {data.post_mais_curtido.vincularImagem && <Image style={d.image} resizeMode="contain" source={{ uri: imageUrl(data.post_mais_curtido.vincularImagem) }} />}
+              <Text style={s.postTitle}>{data.post_mais_curtido.titulo}</Text>
+              <View style={d.badge}><Ionicons name="heart" size={18} color={colors.brand} /><Text style={s.orgName}>{data.post_mais_curtido.curtidas} curtidas no período</Text></View>
+              {data.post_mais_curtido.status === "ARQUIVADO" && <Text style={d.copy}>Publicação arquivada</Text>}
+            </> : <><Ionicons name="heart-outline" size={32} color={colors.brand} /><Text style={d.bestTitle}>Seu próximo destaque começa com um post.</Text><Text style={d.copy}>Nenhum post recebeu curtidas neste mês.</Text></>}
+          </View></Reveal>
+          <View style={d.note}><Ionicons name="information-circle-outline" size={22} color={colors.ink} /><Text style={s.orgName}>Como esses números são contados</Text><Text style={d.copy}>Consideramos curtidas e favoritos que continuam ativos. Cada pessoa é contada uma vez no card de pessoas. Em caso de empate, aparece o post mais recente. Datas seguem o calendário do banco de dados.</Text>{data.favoritos_sem_data > 0 && <Text style={d.copy}>{data.favoritos_sem_data} favoritos antigos sem data entram no total atual, mas não nos novos favoritos do mês.</Text>}</View>
+          <TouchableOpacity style={s.primary} onPress={dashboard.refresh}><Text style={s.primaryText}>Atualizar métricas</Text></TouchableOpacity>
+        </>}
       </ScrollView>
-    </SafeAreaView>
+    </View>
   );
 }

@@ -18,9 +18,11 @@ export default function PostCard({
   count,
   favorite,
   canFavorite,
+  favoriteError,
   pendingLike,
   pendingFavorite,
   reduced,
+  visible = true,
   onLike,
   onFavorite,
   onProfile,
@@ -31,9 +33,11 @@ export default function PostCard({
   count?: number;
   favorite: boolean;
   canFavorite: boolean;
+  favoriteError?: string;
   pendingLike: boolean;
   pendingFavorite: boolean;
   reduced: boolean;
+  visible?: boolean;
   onLike: () => void;
   onFavorite: () => void;
   onProfile: () => void;
@@ -64,7 +68,7 @@ export default function PostCard({
     return () => animation.stop();
   }, [liked, reduced, heartScale]);
   return (
-    <Reveal reduced={reduced}>
+    <Reveal reduced={reduced} visible={visible}>
       <View style={s.card}>
         <View style={s.cardHeader}>
           <TouchableOpacity
@@ -76,11 +80,7 @@ export default function PostCard({
           >
             <View style={s.avatar}>
               {post.foto_organizacao && !avatarFailed ? (
-                <Image
-                  source={{ uri: imageUrl(post.foto_organizacao) }}
-                  style={s.avatarImage}
-                  onError={() => setAvatarFailed(true)}
-                />
+                <Image source={{ uri: imageUrl(post.foto_organizacao) }} style={s.avatarImage} onError={() => setAvatarFailed(true)} />
               ) : (
                 <Text style={s.avatarText}>
                   {post.nome_organizacao?.charAt(0) || "T"}
@@ -91,36 +91,28 @@ export default function PostCard({
               {post.nome_organizacao}
             </Text>
           </TouchableOpacity>
-          <View style={s.category}>
-            <Text style={s.categoryText} numberOfLines={1}>
-              {post.descricao_categoria}
-            </Text>
-          </View>
-        </View>
-        <View style={s.favoriteRow}>
+          {/* Categoria e favorito ficam juntos. */}
+          <View style={s.postHeaderActions}>
+            <View style={s.category}>
+              <Text style={s.categoryText} numberOfLines={1}>{post.descricao_categoria}</Text>
+            </View>
             {canFavorite && (
               <TouchableOpacity
-                style={[s.social, s.favoriteAction]}
+                style={[s.social, s.favoriteAction, favorite && s.favoriteSelected, pendingFavorite && { opacity: 0.5 }]}
                 onPress={onFavorite}
+                hitSlop={4}
                 disabled={pendingFavorite}
                 accessibilityRole="button"
-                accessibilityState={{
-                  selected: favorite,
-                  disabled: pendingFavorite,
-                }}
+                accessibilityState={{ selected: favorite, disabled: pendingFavorite }}
                 accessibilityLabel={favorite ? "Remover organização dos favoritos" : "Favoritar organização"}
               >
-                <Ionicons
-                  name={favorite ? "star" : "star-outline"}
-                  size={22}
-                  color={favorite ? "#557B5D" : colors.ink}
-                />
-                <Text style={s.socialText}>
-                  {favorite ? "Favoritada" : "Favoritar organização"}
-                </Text>
+                <Ionicons name={favorite ? "star" : "star-outline"} size={16} color={favorite ? colors.brand : colors.ink} />
+                <Text style={s.socialText}>{pendingFavorite ? "Salvando…" : favorite ? "Favoritada" : "Favoritar"}</Text>
               </TouchableOpacity>
             )}
+          </View>
         </View>
+        {canFavorite && favoriteError ? <Text style={s.error} accessibilityRole="alert">{favoriteError}</Text> : null}
         <TouchableOpacity
           style={s.media}
           onPress={onImage}
@@ -130,12 +122,7 @@ export default function PostCard({
           accessibilityLabel={`Ampliar foto de ${post.titulo}`}
         >
           {post.vincularImagem && !failed ? (
-            <Image
-              source={{ uri: imageUrl(post.vincularImagem) }}
-              style={s.mediaImage}
-              resizeMode="contain"
-              onError={() => setFailed(true)}
-            />
+            <Image source={{ uri: imageUrl(post.vincularImagem) }} style={s.mediaImage} resizeMode="contain" onError={() => setFailed(true)} />
           ) : (
             <>
               <Ionicons name="image-outline" size={35} color={colors.muted} />
@@ -158,11 +145,7 @@ export default function PostCard({
               }
             >
               <Animated.View style={{ transform: [{ scale: heartScale }] }}>
-                <Ionicons
-                  name={liked ? "heart" : "heart-outline"}
-                  size={24}
-                  color={liked ? colors.brand : colors.ink}
-                />
+                <Ionicons name={liked ? "heart" : "heart-outline"} size={24} color={liked ? colors.brand : colors.ink} />
               </Animated.View>
               <Text style={[s.socialText, liked && { color: colors.brand }]}>
                 {count === undefined
@@ -172,17 +155,11 @@ export default function PostCard({
                   : `${count} ${count === 1 ? "curtida" : "curtidas"}`}
               </Text>
             </TouchableOpacity>
-
           </View>
           <Text style={s.postTitle}>{post.titulo}</Text>
           {post.descricao && (
             <>
-              <Text
-                style={s.description}
-                numberOfLines={
-                  expanded || post.descricao.length <= 160 ? undefined : 3
-                }
-              >
+              <Text style={s.description} numberOfLines={ expanded || post.descricao.length <= 160 ? undefined : 3 }>
                 {post.descricao}
               </Text>
               {post.descricao.length > 160 && (
@@ -194,11 +171,7 @@ export default function PostCard({
               )}
             </>
           )}
-          <TouchableOpacity
-            style={s.businessLink}
-            disabled={!post.id_pessoa_organizacao}
-            onPress={onProfile}
-          >
+          <TouchableOpacity style={s.businessLink} disabled={!post.id_pessoa_organizacao} onPress={onProfile}>
             <Text style={s.businessLinkText}>Conhecer a empresa</Text>
             <Ionicons name="arrow-up-outline" size={15} color="#526C84" />
           </TouchableOpacity>

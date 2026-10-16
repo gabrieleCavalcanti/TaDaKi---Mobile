@@ -18,6 +18,7 @@ import { useNavigation } from "@react-navigation/native";
 
 import { RootStackParamList } from "../../../App";
 import api from "../../api/api";
+import { salvarTokens } from "../../storage/authStorage";
 
 type NavigationProps = NativeStackNavigationProp<RootStackParamList, "Login">;
 
@@ -36,11 +37,13 @@ export default function LoginScreen() {
         password,
       });
 
-      console.log("Login realizado:", response.status);
+      if (response.data.token_acesso && response.data.refresh_token) {
+        await salvarTokens(response.data.token_acesso, response.data.refresh_token);
+      }
 
       Alert.alert("Sucesso", "Login realizado com sucesso");
 
-      navigation.navigate("Home");
+      navigation.reset({ index: 0, routes: [{ name: "Home" }] });
     } catch (error: any) {
       console.log("Erro no login:", error.message);
 

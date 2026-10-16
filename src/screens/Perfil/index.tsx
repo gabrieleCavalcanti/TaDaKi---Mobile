@@ -9,7 +9,7 @@ import {
     Image,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
-import api from "../../api/api";
+import api, { imageUrl } from "../../api/api";
 
 import {
     buscarAvaliacoesPorOrganizacao,
@@ -26,6 +26,7 @@ interface IPessoa {
 }
 
 interface IOrganizacao extends IPessoa {
+    id_organizacao?: number;
     cpf?: string;
     cnpj?: string;
     data_criacao?: string;
@@ -102,20 +103,12 @@ export default function PerfilScreen({ route, navigation }: any) {
 
     async function buscarPessoa(): Promise<IPessoa | null> {
         try {
-            const resposta = await api.get("/pessoas");
-            const lista =
-                resposta.data?.pessoas ||
-                resposta.data?.funcionarios ||
-                resposta.data?.dados ||
-                resposta.data?.data ||
-                [];
-
-            return (
-                lista.find(
-                    (item: IPessoa) =>
-                        Number(item.id_pessoa) === idPessoa
-                ) || null
-            );
+            const resposta = await api.get("/pessoas", { params: { id: idPessoa } });
+            const lista = resposta.data?.pessoaId ?? resposta.data?.pessoas ?? resposta.data?.data ?? [];
+            const pessoa = Array.isArray(lista)
+                ? lista.find((item: IPessoa) => Number(item.id_pessoa) === idPessoa)
+                : resposta.data?.pessoa;
+            return pessoa && Number(pessoa.id_pessoa) === idPessoa ? pessoa : null;
         } catch (error) {
             console.error("Erro ao buscar pessoa:", error);
             return null;
@@ -209,11 +202,15 @@ export default function PerfilScreen({ route, navigation }: any) {
         try {
             setLoadingPosts(true);
 
+            const respostaOrganizacoes = await api.get("/pessoas?tipo=ORGANIZACAO");
+            const listaOrganizacoes = respostaOrganizacoes.data?.funcionarios ?? respostaOrganizacoes.data?.pessoas ?? respostaOrganizacoes.data?.data ?? [];
+            const idOrganizacao = Number(listaOrganizacoes.find((item: IOrganizacao) => Number(item.id_pessoa) === idPessoa)?.id_organizacao);
+            if (!idOrganizacao) throw new Error("Organização não encontrada para este perfil.");
             const resposta = await api.get(
                 "/posts/organizacao",
                 {
                     params: {
-                        id_organizacao: idPessoa,
+                        id_organizacao: idOrganizacao,
                     },
                 }
             );
@@ -232,28 +229,7 @@ export default function PerfilScreen({ route, navigation }: any) {
         }
     }
     function obterUrlImagem(nome?: string) {
-        if (!nome) return "";
-
-        if (
-            nome.startsWith("http://") ||
-            nome.startsWith("https://")
-        ) {
-            return nome;
-        }
-
-        const baseURL = api.defaults.baseURL;
-
-        if (!baseURL) {
-            console.error(
-                "EXPO_PUBLIC_API_URL não foi configurada."
-            );
-            return "";
-        }
-
-        return `${baseURL.replace(/\/$/, "")}/uploads/${nome.replace(
-            /^\//,
-            ""
-        )}`;
+        return imageUrl(nome);
     }
 
     function mudarAba(aba: Aba) {

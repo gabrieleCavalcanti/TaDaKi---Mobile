@@ -25,7 +25,7 @@ export function useDashboard(allowed: boolean, ownerId: number) {
           ).data;
           if (!controller.signal.aborted) {setData(dashboardPayload(raw, month)); setDataOwner(ownerId);}
         } catch (cause) {
-          if (!controller.signal.aborted) setError(apiError(cause));
+          if (!controller.signal.aborted) setError((cause as {response?:{status?:number}})?.response?.status === 404 ? "Dashboard indisponível (404). Atualize a API e confira se há organização vinculada à conta." : apiError(cause));
         } finally {
           if (!controller.signal.aborted) setLoading(false);
         }

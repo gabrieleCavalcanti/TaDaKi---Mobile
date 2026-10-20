@@ -7,6 +7,7 @@ import type { Category, FavoriteMap, Person, Post } from "./model";
 export function useFeed(onUnauthorized: () => void) {
   const [posts, setPosts] = useState<Post[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
+  const [organizations, setOrganizations] = useState<Person[]>([]);
   const [person, setPerson] = useState<Person | null>(null);
   const [likedIds, setLikedIds] = useState<Set<number>>(new Set());
   const [counts, setCounts] = useState<Record<number, number>>({});
@@ -87,6 +88,7 @@ export function useFeed(onUnauthorized: () => void) {
         );
         setPerson(currentPerson);
         setCategories(cats);
+      setOrganizations(orgs);
         setPosts(hydrated);
         setLikedIds(
           new Set(
@@ -107,7 +109,7 @@ export function useFeed(onUnauthorized: () => void) {
             "favoritos",
           ])) {
             if (
-              item.id_organizacao && item.id_favorito
+              item.id_organizacao && item.id_favorito && Number(item.id_cliente) === Number(currentPerson?.id_cliente)
             )
               saved[item.id_organizacao] = {
                 favoritado: true,
@@ -232,6 +234,7 @@ export function useFeed(onUnauthorized: () => void) {
     if (!lock(key)) return;
     setFavoriteErrors(previous => ({ ...previous, [orgId]: "" }));
     try {
+      if (!Number(person?.id_cliente)) throw new Error("Não foi possível identificar o cadastro de cliente. Entre novamente na conta.");
       const existing = favorites[orgId];
       let entry;
       if (existing?.favoritado && existing.id_favorito) {
@@ -240,6 +243,7 @@ export function useFeed(onUnauthorized: () => void) {
       } else {
         const result = await api.post("/Favoritos", {
           id_organizacao: orgId,
+            id_cliente: Number(person?.id_cliente),
         });
         const id = Number(
           result.data.novoRegistro?.insertId ?? result.data.id_favorito,
@@ -271,6 +275,7 @@ export function useFeed(onUnauthorized: () => void) {
     posts,
     person,
     categories,
+    organizations,
     likedIds,
     counts,
     favorites,

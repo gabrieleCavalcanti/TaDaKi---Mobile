@@ -2,6 +2,7 @@ import { useIsFocused } from "@react-navigation/native";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Image,
   Modal,
@@ -19,7 +20,7 @@ import type { ViewToken } from "react-native";
 import type { RootStackParamList } from "../../../App";
 import api, { imageUrl } from "../../api/api";
 import { removerTokens } from "../../storage/authStorage";
-import { filterPosts, userType } from "./model";
+import { filterPosts, userType, photo } from "./model";
 import type { Post } from "./model";
 import { useFeed } from "./useFeed";
 import { useDiscovery } from "./useDiscovery";
@@ -55,6 +56,10 @@ export function FeedScreen({
   const [category, setCategory] = useState(0);
   const [favoritesOnly, setFavoritesOnly] = useState(initialFavorites);
   const [menu, setMenu] = useState(false);
+  const confirmLogout = () => Alert.alert("Sair da conta", "Deseja realmente sair da sua conta?", [
+    {text:"Cancelar",style:"cancel"},
+    {text:"Sair",style:"destructive",onPress:()=>{setMenu(false);void api.post("/auth/logout").catch(()=>{}).finally(unauthorized);}},
+  ]);
   const [composer, setComposer] = useState(false);
   const [image, setImage] = useState<Post | null>(null);
   const [imageFailed, setImageFailed] = useState(false);
@@ -125,15 +130,15 @@ export function FeedScreen({
         </Text>
         <Text style={s.title}>
           {onlyLikes
-            ? "Suas descobertas favoritas"
+            ? "Minhas curtidas"
             : favoritesOnly
               ? "Empresas favoritas"
-              : "Descubra quem faz acontecer"}
+              : "Seu próximo achado está por perto"}
         </Text>
         <Text style={s.subtitle}>
           {onlyLikes
             ? "Reencontre os produtos e serviços que chamaram sua atenção."
-            : "Produtos, serviços e histórias dos pequenos negócios."}
+            : "Descubra e apoie negócios locais que fazem sua região especial."}
         </Text>
       </View>
       {!onlyLikes && (
@@ -184,6 +189,29 @@ export function FeedScreen({
               )}
             </>
           )}
+        </View>
+      )}
+      {!onlyLikes && !favoritesOnly && (
+        <View style={{ paddingTop: 8, paddingBottom: 6 }}>
+          <View style={{ paddingHorizontal: 18, flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+            <Text style={{ color: colors.ink, fontWeight: "800", fontSize: 17 }}>Negócios para descobrir</Text>
+            <Ionicons name="location-outline" size={19} color={colors.brand}/>
+          </View>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 16, gap: 12 }}>
+            {feed.organizations.filter(org => String(org.nome || org.username || "").toLowerCase().includes(search.toLowerCase())).slice(0, 10).map(org => {
+              const post = feed.posts.find(p => Number(p.id_organizacao) === Number(org.id_organizacao));
+              const cover = post?.vincularImagem || photo(org);
+              return (
+              <View key={org.id_pessoa} style={{ width: 202, backgroundColor: "white", borderRadius: 15, borderWidth: 1, borderColor: colors.line, overflow: "hidden" }}>
+                <TouchableOpacity accessibilityRole="button" accessibilityLabel={`Conhecer ${org.nome || org.username || "organização"}`} onPress={() => { if (org.id_pessoa) navigation.navigate("Perfil", { id_pessoa: org.id_pessoa }); }}>
+                {cover ? <Image source={{ uri: imageUrl(cover) }} style={{ height: 96, width: "100%" }} resizeMode="cover"/> : <View style={{height:96, backgroundColor: colors.soft, justifyContent:"center", alignItems:"center"}}><Ionicons name="storefront-outline" size={28} color={colors.brand}/></View>}
+                <View style={{padding: 12, gap: 5}}><Text numberOfLines={1} style={{fontWeight:"800",color:colors.ink}}>{org.nome || org.username || "Organização"}</Text><Text numberOfLines={1} style={{fontSize:12,color:colors.muted}}>{post?.descricao_categoria || "Conheça esta organização"}</Text></View>
+                </TouchableOpacity>
+                {canFavorite && <TouchableOpacity accessibilityRole="button" accessibilityLabel={`${feed.favorites[Number(org.id_organizacao)]?.favoritado ? "Remover dos favoritos" : "Favoritar"} ${org.nome || org.username}`} accessibilityState={{selected:Boolean(feed.favorites[Number(org.id_organizacao)]?.favoritado),disabled:feed.pending.has(`favorite:${Number(org.id_organizacao)}`)}} disabled={feed.pending.has(`favorite:${Number(org.id_organizacao)}`) || !Number(org.id_organizacao)} onPress={() => void feed.toggleFavorite(Number(org.id_organizacao))} style={{minHeight:48,justifyContent:"center",alignItems:"center",flexDirection:"row",gap:8,borderTopWidth:1,borderColor:colors.line}}><Ionicons name={feed.favorites[Number(org.id_organizacao)]?.favoritado ? "star" : "star-outline"} size={20} color={colors.brand}/><Text style={{color:colors.ink,fontWeight:"700"}}>{feed.favorites[Number(org.id_organizacao)]?.favoritado ? "Favoritada" : "Favoritar"}</Text></TouchableOpacity>}
+                {feed.favoriteErrors[Number(org.id_organizacao)] && <Text accessibilityRole="alert" style={{color:colors.brand,padding:7}}>{feed.favoriteErrors[Number(org.id_organizacao)]}</Text>}
+              </View>
+            );})}
+          </ScrollView>
         </View>
       )}
       <View style={s.search}>
@@ -277,8 +305,8 @@ export function FeedScreen({
         </TouchableOpacity>
         <View style={s.row}>
           {canCreate && !onlyLikes && (
-            <TouchableOpacity style={[s.iconButton, s.createButton]} onPress={() => setComposer(true)} accessibilityLabel="Criar publicação">
-              <Ionicons name="add" size={25} color="white" />
+            <TouchableOpacity style={[s.iconButton, s.createButton, { width: undefined, paddingHorizontal: 13, gap: 7, flexDirection: "row", borderRadius: 12 }]} onPress={() => setComposer(true)} accessibilityLabel="Criar publicação">
+              <Ionicons name="add" size={22} color="white" /><Text style={{ color: "white", fontWeight: "800", fontSize: 12 }}>Criar publicação</Text>
             </TouchableOpacity>
           )}
           <TouchableOpacity style={s.iconButton} onPress={() => setMenu(true)} accessibilityLabel="Abrir menu">
@@ -433,8 +461,11 @@ export function FeedScreen({
                 </Text>
               </TouchableOpacity>
             )}
+            <Text style={s.menuSection}>INFORMAÇÕES</Text>
+            <TouchableOpacity style={s.menuItem} onPress={() => {setMenu(false); navigation.navigate("Sobre");}}><Ionicons name="information-circle-outline" size={20} color={colors.ink} /><Text style={s.menuText}>Sobre o TaDaKi</Text></TouchableOpacity>
+            <TouchableOpacity style={s.menuItem} onPress={() => {setMenu(false); navigation.navigate("Ajuda");}}><Ionicons name="help-circle-outline" size={20} color={colors.ink} /><Text style={s.menuText}>Ajuda e dúvidas frequentes</Text></TouchableOpacity>
             <Text style={s.menuSection}>CONTA</Text>
-            <TouchableOpacity style={s.menuItem} onPress={() => { setMenu(false); void api .post("/auth/logout") .catch(() => {}) .finally(unauthorized); }}>
+            <TouchableOpacity style={s.menuItem} onPress={confirmLogout}>
               <Ionicons name="log-out-outline" size={20} color={colors.brand} />
               <Text style={[s.menuText, { color: colors.brand }]}>
                 Sair da conta

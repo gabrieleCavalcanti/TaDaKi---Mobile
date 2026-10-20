@@ -70,9 +70,9 @@ export const styles = StyleSheet.create({
     paddingHorizontal: 14,
     paddingVertical: 9,
   },
-  chipActive: { backgroundColor: colors.ink, borderColor: colors.ink },
+  chipActive: { backgroundColor: "#FFF0F1", borderColor: colors.brand },
   chipText: { color: colors.muted, fontSize: 11, fontWeight: "600" },
-  chipActiveText: { color: "white" },
+  chipActiveText: { color: colors.brand },
   card: {
     backgroundColor: "white",
     borderTopWidth: 1,
@@ -266,3 +266,4 @@ export const styles = StyleSheet.create({
   },
   disabled: { opacity: 0.5 },
 });
+// Os estilos de Home e Curtidas são compartilhados para manter a mesma linguagem visual.

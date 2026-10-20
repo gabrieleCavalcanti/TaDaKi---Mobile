@@ -87,14 +87,12 @@ export default function PostCard({
                 </Text>
               )}
             </View>
-            <Text style={[s.orgName, { flex: 1 }]} numberOfLines={1}>
-              {post.nome_organizacao}
-            </Text>
+            <View style={{flex:1,gap:3}}><Text style={s.orgName} numberOfLines={1}>{post.nome_organizacao}</Text><View style={{flexDirection:"row",alignItems:"center",gap:4}}><Ionicons name="location-outline" size={12} color={colors.muted}/><Text numberOfLines={1} style={{color:colors.muted,fontSize:11}}>{post.descricao_categoria || "Negócio local"}</Text></View></View>
           </TouchableOpacity>
           {/* Categoria e favorito ficam juntos. */}
           <View style={s.postHeaderActions}>
             <View style={s.category}>
-              <Text style={s.categoryText} numberOfLines={1}>{post.descricao_categoria}</Text>
+              <Ionicons name="pricetag-outline" size={12} color={colors.muted} /><Text style={s.categoryText} numberOfLines={1}>{post.descricao_categoria}</Text>
             </View>
             {canFavorite && (
               <TouchableOpacity
@@ -122,7 +120,7 @@ export default function PostCard({
           accessibilityLabel={`Ampliar foto de ${post.titulo}`}
         >
           {post.vincularImagem && !failed ? (
-            <Image source={{ uri: imageUrl(post.vincularImagem) }} style={s.mediaImage} resizeMode="contain" onError={() => setFailed(true)} />
+            <Image source={{ uri: imageUrl(post.vincularImagem) }} style={s.mediaImage} resizeMode="cover" onError={() => setFailed(true)} />
           ) : (
             <>
               <Ionicons name="image-outline" size={35} color={colors.muted} />
@@ -171,9 +169,9 @@ export default function PostCard({
               )}
             </>
           )}
-          <TouchableOpacity style={s.businessLink} disabled={!post.id_pessoa_organizacao} onPress={onProfile}>
-            <Text style={s.businessLinkText}>Conhecer a empresa</Text>
-            <Ionicons name="arrow-up-outline" size={15} color="#526C84" />
+          <TouchableOpacity style={s.businessLink} accessibilityRole="button" accessibilityLabel={`Conhecer organização ${post.nome_organizacao}`} disabled={!post.id_pessoa_organizacao} onPress={onProfile}>
+            <Ionicons name="storefront-outline" size={17} color="white" /><Text style={s.businessLinkText}>Conhecer organização</Text>
+            <Ionicons name="arrow-forward-outline" size={17} color="white" />
           </TouchableOpacity>
         </View>
       </View>

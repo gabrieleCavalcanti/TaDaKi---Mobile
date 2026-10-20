@@ -1,7 +1,7 @@
 import { StyleSheet } from "react-native";
 export const dashboardStyles = StyleSheet.create({
   content: { padding: 18, paddingBottom: 45, gap: 16 },
-  hero: { padding: 22, borderRadius: 22, borderWidth: 1, borderColor: "#E0E6EC", backgroundColor: "white", gap: 10 },
+  hero: { padding: 22, borderRadius: 22, borderWidth: 1, borderColor: "#E0E6EC", backgroundColor: "#EDF4FA", gap: 10 },
   eyebrow: { color: "#B01013", fontSize: 10, letterSpacing: 1.3, fontWeight: "800" },
   title: { fontSize: 29, lineHeight: 35, letterSpacing: -1, fontWeight: "800", color: "#252D36" },
   copy: { fontSize: 12, lineHeight: 20, color: "#444A52" },
@@ -9,13 +9,15 @@ export const dashboardStyles = StyleSheet.create({
   month: { flex: 1, textAlign: "center", color: "#252D36", fontSize: 15, fontWeight: "700" },
   grid: { flexDirection: "row", flexWrap: "wrap", gap: 12 },
   metric: { flexGrow: 1, flexBasis: "45%", padding: 17, borderRadius: 17, borderWidth: 1, borderColor: "#E0E6EC", backgroundColor: "white", gap: 12 },
-  icon: { width: 42, height: 42, borderRadius: 12, alignItems: "center", justifyContent: "center", backgroundColor: "#EDF3F8" },
+  icon: { width: 42, height: 42, borderRadius: 12, alignItems: "center", justifyContent: "center", backgroundColor: "#EDF4FA" },
   metricLabel: { fontSize: 12, lineHeight: 18, fontWeight: "700", color: "#252D36", minHeight: 36 },
   number: { fontSize: 36, fontWeight: "800", color: "#B01013" },
   best: { padding: 21, borderWidth: 1, borderColor: "#E0E6EC", borderRadius: 20, gap: 14 },
   bestHeader: { flexDirection: "row", alignItems: "center", gap: 12 },
   bestTitle: { fontSize: 19, fontWeight: "700", color: "#252D36" },
-  image: { height: 220, width: "100%", backgroundColor: "#EDF3F8", borderRadius: 12 },
-  badge: { alignSelf: "flex-start", flexDirection: "row", alignItems: "center", gap: 8, padding: 10, borderRadius: 10, backgroundColor: "#EDF3F8" },
-  note: { backgroundColor: "#EDF3F8", padding: 18, borderRadius: 14, gap: 8 },
+  image: { height: 220, width: "100%", backgroundColor: "#EDF4FA", borderRadius: 12 },
+  badge: { alignSelf: "flex-start", flexDirection: "row", alignItems: "center", gap: 8, padding: 10, borderRadius: 10, backgroundColor: "#EDF4FA" },
+  note: { backgroundColor: "#EDF4FA", padding: 18, borderRadius: 14, gap: 8 },
 });
+
+// Dashboard: identidade de marca reforçada no tema de cartões e indicadores.

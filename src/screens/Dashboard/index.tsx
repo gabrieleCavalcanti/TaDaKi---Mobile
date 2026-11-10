@@ -66,6 +66,11 @@ export default function Dashboard({
   ] : [];
   return (
     <View style={s.page}>
+        <SafeAreaView
+    style={{ flex: 1, backgroundColor: "#fff" }} // use a mesma cor de fundo do s.header
+    edges={["top"]}
+  >
+    
       <ScrollView contentContainerStyle={d.content}>
         <TouchableOpacity style={s.row} onPress={() => navigation.popTo("Home", { favoritos: false })}>
           <Ionicons name="arrow-back" size={20} color={colors.ink} /><Text style={s.textButton}>Voltar para o feed</Text>
@@ -98,6 +103,7 @@ export default function Dashboard({
           <TouchableOpacity style={s.primary} onPress={dashboard.refresh}><Text style={s.primaryText}>Atualizar métricas</Text></TouchableOpacity>
         </>}
       </ScrollView>
+  </SafeAreaView>
     </View>
   );
 }

@@ -5,20 +5,19 @@ import {
   TextInput,
   TouchableOpacity,
   StyleSheet,
-  Image,
-  ImageBackground,
   ScrollView,
   Alert,
   KeyboardAvoidingView,
   Platform,
   Modal,
+  ActivityIndicator,
 } from "react-native";
-
+import { Feather } from "@expo/vector-icons";
+import DateTimePicker from "@react-native-community/datetimepicker";
 import { NativeStackScreenProps } from "@react-navigation/native-stack";
+
 import { RootStackParamList } from "../../../App";
 import api from "../../api/api";
-
-import DateTimePicker from "@react-native-community/datetimepicker";
 
 type Props = NativeStackScreenProps<RootStackParamList, "Cadastro">;
 
@@ -27,963 +26,738 @@ type AreaAtuacao = {
   descricao: string;
 };
 
+type FeatherName = React.ComponentProps<typeof Feather>["name"];
+
+const VINHO = "#75080A";
+
+// =========================
+// FORMATADORES / VALIDAÇÕES (iguais aos da web)
+// =========================
+
+const formatarTelefone = (valor: string) => {
+  const numeros = valor.replace(/\D/g, "").slice(0, 11);
+
+  if (numeros.length <= 2) {
+    return numeros.length > 0 ? `(${numeros}` : "";
+  }
+
+  if (numeros.length <= 10) {
+    return `(${numeros.slice(0, 2)}) ${numeros.slice(2, 6)}${
+      numeros.length > 6 ? `-${numeros.slice(6, 10)}` : ""
+    }`;
+  }
+
+  return `(${numeros.slice(0, 2)}) ${numeros.slice(2, 7)}-${numeros.slice(7, 11)}`;
+};
+
+const formatarDocumento = (valor: string, tipo: "cpf" | "cnpj") => {
+  const numeros = valor.replace(/\D/g, "");
+
+  if (tipo === "cpf") {
+    return numeros
+      .slice(0, 11)
+      .replace(/(\d{3})(\d)/, "$1.$2")
+      .replace(/(\d{3})(\d)/, "$1.$2")
+      .replace(/(\d{3})(\d{1,2})$/, "$1-$2");
+  }
+
+  return numeros
+    .slice(0, 14)
+    .replace(/(\d{2})(\d)/, "$1.$2")
+    .replace(/(\d{3})(\d)/, "$1.$2")
+    .replace(/(\d{3})(\d)/, "$1/$2")
+    .replace(/(\d{4})(\d{1,2})$/, "$1-$2");
+};
+
+const validarSenha = (senha: string): string | null => {
+  if (senha.length < 8) {
+    return "A senha deve ter pelo menos 8 caracteres.";
+  }
+
+  const senhasBloqueadas = [
+    "12345678",
+    "87654321",
+    "abcdefgh",
+    "password",
+    "senha123",
+    "qwerty123",
+  ];
+
+  if (senhasBloqueadas.includes(senha.toLowerCase())) {
+    return "Essa senha é muito fácil de adivinhar. Escolha outra.";
+  }
+
+  if (/^(\d)\1+$/.test(senha)) {
+    return "A senha não pode conter apenas números repetidos.";
+  }
+
+  if (/^\d+$/.test(senha)) {
+    return "A senha não pode conter apenas números.";
+  }
+
+  return null;
+};
+
+const validarEmailGmail = (email: string): boolean =>
+  /^[a-zA-Z0-9._%+-]+@gmail\.com$/i.test(email.trim());
+
+const formatarData = (date: Date | null) => {
+  if (!date) return "";
+
+  const dia = String(date.getDate()).padStart(2, "0");
+  const mes = String(date.getMonth() + 1).padStart(2, "0");
+  const ano = date.getFullYear();
+
+  return `${dia}/${mes}/${ano}`;
+};
+
+const dataParaISO = (date: Date) =>
+  `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(
+    date.getDate(),
+  ).padStart(2, "0")}`;
+
+// =========================
+// COMPONENTES AUXILIARES
+// =========================
+
+function Field({
+  icon,
+  right,
+  ...props
+}: {
+  icon: FeatherName;
+  right?: React.ReactNode;
+} & React.ComponentProps<typeof TextInput>) {
+  return (
+    <View style={styles.inputContainer}>
+      <Feather name={icon} size={18} color="#8a8a8a" style={styles.inputIcon} />
+      <TextInput
+        style={styles.input}
+        placeholderTextColor="#b0b0b0"
+        {...props}
+      />
+      {right}
+    </View>
+  );
+}
+
+function PasswordField({
+  value,
+  onChangeText,
+  placeholder,
+}: {
+  value: string;
+  onChangeText: (t: string) => void;
+  placeholder: string;
+}) {
+  const [visivel, setVisivel] = useState(false);
+
+  return (
+    <Field
+      icon="lock"
+      value={value}
+      onChangeText={onChangeText}
+      placeholder={placeholder}
+      secureTextEntry={!visivel}
+      autoCapitalize="none"
+      autoCorrect={false}
+      right={
+        <TouchableOpacity
+          onPress={() => setVisivel(!visivel)}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <Feather name={visivel ? "eye-off" : "eye"} size={18} color="#8a8a8a" />
+        </TouchableOpacity>
+      }
+    />
+  );
+}
+
+function DateField({
+  value,
+  placeholder,
+  onPress,
+}: {
+  value: Date | null;
+  placeholder: string;
+  onPress: () => void;
+}) {
+  return (
+    <TouchableOpacity
+      style={styles.inputContainer}
+      onPress={onPress}
+      activeOpacity={0.7}
+    >
+      <Feather
+        name="calendar"
+        size={18}
+        color="#8a8a8a"
+        style={styles.inputIcon}
+      />
+      <Text style={[styles.dateText, !value && styles.placeholderText]}>
+        {value ? formatarData(value) : placeholder}
+      </Text>
+    </TouchableOpacity>
+  );
+}
+
 export default function CadastroScreen({ navigation }: Props) {
-  const [tipoCadastro, setTipoCadastro] = useState<
-    "organizacao" | "cliente"
-  >("cliente");
+  const [tipoCadastro, setTipoCadastro] = useState<"organizacao" | "cliente">(
+    "cliente",
+  );
+  const organizacao = tipoCadastro === "organizacao";
 
-  // =========================
+  // CAMPOS COMPARTILHADOS
+  const [email, setEmail] = useState("");
+
+  // CLIENTE
+  const [nomeCompleto, setNomeCompleto] = useState("");
+  const [usuario, setUsuario] = useState("");
+  const [senha, setSenha] = useState("");
+  const [confirmacaoSenha, setConfirmacaoSenha] = useState("");
+  const [dataNascimento, setDataNascimento] = useState<Date | null>(null);
+
   // ORGANIZAÇÃO
-  // =========================
-
   const [nomeOrganizacao, setNomeOrganizacao] = useState("");
   const [usuarioOrganizacao, setUsuarioOrganizacao] = useState("");
   const [senhaOrganizacao, setSenhaOrganizacao] = useState("");
   const [confirmacaoSenhaOrganizacao, setConfirmacaoSenhaOrganizacao] =
     useState("");
-
-  const [tipoDocumento, setTipoDocumento] = useState<"CPF" | "CNPJ">("CNPJ");
-  const [cpf, setCpf] = useState("");
-  const [cnpj, setCnpj] = useState("");
+  const [telefone, setTelefone] = useState("");
+  const [tipoDocumento, setTipoDocumento] = useState<"cpf" | "cnpj">("cnpj");
+  const [documento, setDocumento] = useState("");
+  const [dataCriacao, setDataCriacao] = useState<Date | null>(null);
 
   const [areasAtuacao, setAreasAtuacao] = useState<AreaAtuacao[]>([]);
-  const [areaSelecionada, setAreaSelecionada] =
-    useState<AreaAtuacao | null>(null);
+  const [areaSelecionada, setAreaSelecionada] = useState<AreaAtuacao | null>(
+    null,
+  );
   const [mostrarDropdown, setMostrarDropdown] = useState(false);
 
-  // =========================
-  // CLIENTE
-  // =========================
+  // CALENDÁRIO (qual campo está aberto)
+  const [calendario, setCalendario] = useState<
+    "nascimento" | "criacao" | null
+  >(null);
 
-  const [nomeCompleto, setNomeCompleto] = useState("");
-  const [usuario, setUsuario] = useState("");
-  const [senha, setSenha] = useState("");
-  const [confirmacaoSenha, setConfirmacaoSenha] = useState("");
+  // MENSAGENS
+  const [loading, setLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // =========================
-  // CAMPOS COMPARTILHADOS
-  // =========================
-
-  const [email, setEmail] = useState("");
-  const [telefone, setTelefone] = useState("");
-  const [cep, setCep] = useState("");
-  const [numero, setNumero] = useState("");
-
-  // =========================
-  // DATA CLIENTE
-  // =========================
-
-  const [dataNascimento, setDataNascimento] = useState<Date | null>(null);
-  const [mostrarCalendario, setMostrarCalendario] = useState(false);
-
-  // =========================
   // BUSCAR ÁREAS
-  // =========================
-
   useEffect(() => {
     async function carregarAreas() {
       try {
         const response = await api.get("/AreaAtuacao");
 
-        console.log(
-          "Áreas de atuação:",
-          response.data.resultadoSelecionaTodos
-        );
-
-        setAreasAtuacao(response.data.resultadoSelecionaTodos);
+        if (Array.isArray(response.data?.resultadoSelecionaTodos)) {
+          setAreasAtuacao(response.data.resultadoSelecionaTodos);
+        } else {
+          setAreasAtuacao([]);
+        }
       } catch (error: any) {
         console.log(
           "Erro ao carregar áreas:",
-          error.response?.data || error.message
+          error.response?.data || error.message,
         );
 
-        Alert.alert(
-          "Erro",
-          "Não foi possível carregar as áreas de atuação."
-        );
+        Alert.alert("Erro", "Não foi possível carregar as áreas de atuação.");
       }
     }
 
     carregarAreas();
   }, []);
 
-  // =========================
-  // CALENDÁRIO
-  // =========================
+  function alterarData(_event: any, date?: Date) {
+    const alvo = calendario;
+    setCalendario(null);
 
-  const abrirCalendario = () => {
-    setMostrarCalendario(true);
-  };
+    if (!date) return;
 
-  const alterarData = (event: any, date?: Date) => {
-    setMostrarCalendario(false);
+    if (alvo === "nascimento") setDataNascimento(date);
+    if (alvo === "criacao") setDataCriacao(date);
+  }
 
-    if (date) {
-      setDataNascimento(date);
-    }
-  };
+  function trocarTipo(tipo: "organizacao" | "cliente") {
+    setTipoCadastro(tipo);
+    setErrorMessage(null);
+  }
 
-  const formatarData = (date: Date | null) => {
-    if (!date) return "";
-
-    const dia = String(date.getDate()).padStart(2, "0");
-    const mes = String(date.getMonth() + 1).padStart(2, "0");
-    const ano = date.getFullYear();
-
-    return `${dia}/${mes}/${ano}`;
-  };
-
-  // =========================
-  // MÁSCARA CPF
-  // =========================
-
-  const formatarCPF = (texto: string) => {
-    const numeros = texto.replace(/\D/g, "").slice(0, 11);
-
-    let formatado = numeros;
-
-    if (numeros.length > 3) {
-      formatado = `${numeros.slice(0, 3)}.${numeros.slice(3)}`;
-    }
-
-    if (numeros.length > 6) {
-      formatado = `${numeros.slice(0, 3)}.${numeros.slice(
-        3,
-        6
-      )}.${numeros.slice(6)}`;
-    }
-
-    if (numeros.length > 9) {
-      formatado = `${numeros.slice(0, 3)}.${numeros.slice(
-        3,
-        6
-      )}.${numeros.slice(6, 9)}-${numeros.slice(9)}`;
-    }
-
-    return formatado;
-  };
-
-  // =========================
-  // MÁSCARA CNPJ
-  // =========================
-
-  const formatarCNPJ = (texto: string) => {
-    const numeros = texto.replace(/\D/g, "").slice(0, 14);
-
-    let formatado = numeros;
-
-    if (numeros.length > 2) {
-      formatado = `${numeros.slice(0, 2)}.${numeros.slice(2)}`;
-    }
-
-    if (numeros.length > 5) {
-      formatado = `${numeros.slice(0, 2)}.${numeros.slice(
-        2,
-        5
-      )}.${numeros.slice(5)}`;
-    }
-
-    if (numeros.length > 8) {
-      formatado = `${numeros.slice(0, 2)}.${numeros.slice(
-        2,
-        5
-      )}.${numeros.slice(5, 8)}/${numeros.slice(8)}`;
-    }
-
-    if (numeros.length > 12) {
-      formatado = `${numeros.slice(0, 2)}.${numeros.slice(
-        2,
-        5
-      )}.${numeros.slice(5, 8)}/${numeros.slice(
-        8,
-        12
-      )}-${numeros.slice(12)}`;
-    }
-
-    return formatado;
-  };
-
-  // =========================
-  // DATA ATUAL
-  // =========================
-
-  const obterDataAtual = () => {
-    const hoje = new Date();
-
-    const ano = hoje.getFullYear();
-    const mes = String(hoje.getMonth() + 1).padStart(2, "0");
-    const dia = String(hoje.getDate()).padStart(2, "0");
-
-    return `${ano}-${mes}-${dia}`;
-  };
+  function erro(mensagem: string) {
+    setErrorMessage(mensagem);
+  }
 
   // =========================
   // CADASTRAR
   // =========================
 
   async function cadastrar() {
-    try {
-      // =====================================
-      // CADASTRO DE ORGANIZAÇÃO
-      // =====================================
+    setErrorMessage(null);
 
-      if (tipoCadastro === "organizacao") {
+    try {
+      // ORGANIZAÇÃO
+      if (organizacao) {
         if (
           !nomeOrganizacao.trim() ||
           !usuarioOrganizacao.trim() ||
-          !senhaOrganizacao ||
-          !confirmacaoSenhaOrganizacao ||
           !email.trim() ||
           !telefone.trim() ||
-          !cep.trim() ||
-          !numero.trim() ||
+          !senhaOrganizacao ||
+          !confirmacaoSenhaOrganizacao ||
+          !documento ||
+          !dataCriacao ||
           !areaSelecionada
         ) {
-          Alert.alert("Atenção", "Preencha todos os campos.");
-          return;
+          return erro("Preencha todos os campos.");
         }
 
-        // Verifica se as senhas são iguais
+        if (nomeOrganizacao.trim().length < 3) {
+          return erro("O nome da organização deve ter pelo menos 3 caracteres.");
+        }
+
+        if (!validarEmailGmail(email)) {
+          return erro("Digite um e-mail válido do Gmail (exemplo@gmail.com).");
+        }
+
+        const documentoNumeros = documento.replace(/\D/g, "");
+
+        if (tipoDocumento === "cpf" && documentoNumeros.length !== 11) {
+          return erro("Digite um CPF válido.");
+        }
+
+        if (tipoDocumento === "cnpj" && documentoNumeros.length !== 14) {
+          return erro("Digite um CNPJ válido.");
+        }
+
+        const erroSenha = validarSenha(senhaOrganizacao);
+        if (erroSenha) return erro(erroSenha);
+
         if (senhaOrganizacao !== confirmacaoSenhaOrganizacao) {
-          Alert.alert("Atenção", "As senhas não são iguais.");
-          return;
+          return erro("As senhas não coincidem.");
         }
 
-        // Verifica CPF ou CNPJ
-        if (tipoDocumento === "CPF") {
-          const cpfNumeros = cpf.replace(/\D/g, "");
+        setLoading(true);
 
-          if (cpfNumeros.length !== 11) {
-            Alert.alert("Atenção", "Digite um CPF válido.");
-            return;
-          }
-        } else {
-          const cnpjNumeros = cnpj.replace(/\D/g, "");
-
-          if (cnpjNumeros.length !== 14) {
-            Alert.alert("Atenção", "Digite um CNPJ válido.");
-            return;
-          }
-        }
-
-        if (senhaOrganizacao.length < 8) {
-          Alert.alert(
-            "Atenção",
-            "A senha deve ter pelo menos 8 caracteres."
-          );
-          return;
-        }
-
-        const response = await api.post("/pessoas", {
+        await api.post("/pessoas", {
           nome: nomeOrganizacao.trim(),
           tipo: "ORGANIZACAO",
           username: usuarioOrganizacao.trim(),
           password: senhaOrganizacao,
 
-          cep: cep.replace(/\D/g, ""),
-          numero: numero.trim(),
-
           email: email.trim(),
           telefone: telefone.replace(/\D/g, ""),
 
-          cpf:
-            tipoDocumento === "CPF"
-              ? cpf.replace(/\D/g, "")
-              : null,
+          cep: "",
+          numero: "",
 
-          cnpj:
-            tipoDocumento === "CNPJ"
-              ? cnpj.replace(/\D/g, "")
-              : null,
+          cpf: tipoDocumento === "cpf" ? documentoNumeros : null,
+          cnpj: tipoDocumento === "cnpj" ? documentoNumeros : null,
 
-          data_criacao: obterDataAtual(),
-
+          data_criacao: dataParaISO(dataCriacao),
           id_area_atuacao: areaSelecionada.id_area_atuacao,
         });
 
-        console.log("Organização cadastrada:", response.status);
-
-        Alert.alert(
-          "Sucesso",
-          "Organização cadastrada com sucesso!",
-          [
-            {
-              text: "OK",
-              onPress: () => navigation.navigate("Login"),
-            },
-          ]
-        );
+        Alert.alert("Sucesso", "Organização cadastrada com sucesso!", [
+          { text: "OK", onPress: () => navigation.navigate("Login") },
+        ]);
 
         return;
       }
 
-      // =====================================
-      // CADASTRO DE CLIENTE
-      // =====================================
-
+      // CLIENTE
       if (
         !nomeCompleto.trim() ||
-        !email.trim() ||
-        !telefone.trim() ||
-        !cep.trim() ||
-        !numero.trim() ||
-        !dataNascimento ||
         !usuario.trim() ||
+        !email.trim() ||
         !senha ||
-        !confirmacaoSenha
+        !confirmacaoSenha ||
+        !dataNascimento
       ) {
-        Alert.alert("Atenção", "Preencha todos os campos.");
-        return;
+        return erro("Preencha todos os campos.");
       }
+
+      if (nomeCompleto.trim().length < 3) {
+        return erro("O nome deve ter pelo menos 3 caracteres.");
+      }
+
+      if (!validarEmailGmail(email)) {
+        return erro("Digite um e-mail válido do Gmail (exemplo@gmail.com).");
+      }
+
+      const erroSenha = validarSenha(senha);
+      if (erroSenha) return erro(erroSenha);
 
       if (senha !== confirmacaoSenha) {
-        Alert.alert("Atenção", "As senhas não são iguais.");
-        return;
+        return erro("As senhas não coincidem.");
       }
 
-      if (senha.length < 8) {
-        Alert.alert(
-          "Atenção",
-          "A senha deve ter pelo menos 8 caracteres."
-        );
-        return;
-      }
+      setLoading(true);
 
-      const dataFormatada =
-        `${dataNascimento.getFullYear()}-` +
-        `${String(dataNascimento.getMonth() + 1).padStart(2, "0")}-` +
-        `${String(dataNascimento.getDate()).padStart(2, "0")}`;
-
-      const response = await api.post("/pessoas", {
+      await api.post("/pessoas", {
         nome: nomeCompleto.trim(),
         tipo: "CLIENTE",
-        data_nascimento: dataFormatada,
         username: usuario.trim(),
         password: senha,
-        cep: cep.replace(/\D/g, ""),
-        numero: numero.trim(),
         email: email.trim(),
-        telefone: telefone.replace(/\D/g, ""),
+        data_nascimento: dataParaISO(dataNascimento),
       });
 
-      console.log("Cliente cadastrado:", response.status);
-
-      Alert.alert(
-        "Sucesso",
-        "Cliente cadastrado com sucesso!",
-        [
-          {
-            text: "OK",
-            onPress: () => navigation.navigate("Login"),
-          },
-        ]
-      );
+      Alert.alert("Sucesso", "Cliente cadastrado com sucesso!", [
+        { text: "OK", onPress: () => navigation.navigate("Login") },
+      ]);
     } catch (error: any) {
       console.log("Erro no cadastro:", error.message);
-
-      console.log(
-        "Resposta do servidor:",
-        error.response?.data
-      );
+      console.log("Resposta do servidor:", error.response?.data);
 
       if (error.response?.status === 400) {
-        return Alert.alert(
-          "Erro",
-          error.response.data?.message ||
-            "Dados inválidos."
-        );
+        return erro(error.response.data?.message || "Dados inválidos.");
       }
 
       if (error.response?.status === 409) {
-        return Alert.alert(
-          "Erro",
-          error.response.data?.message ||
-            "Usuário ou e-mail já cadastrado."
+        return erro(
+          error.response.data?.message || "Usuário ou e-mail já cadastrado.",
         );
       }
 
-      Alert.alert(
-        "Erro",
-        error.response?.data?.message ||
-          "Falha ao conectar com o servidor."
-      );
+      erro(error.response?.data?.message || "Falha ao conectar com o servidor.");
+    } finally {
+      setLoading(false);
     }
   }
 
   return (
-    <ImageBackground
-      source={require("../../assets/fundoLogin.webp")}
-      style={styles.background}
-      resizeMode="cover"
-    >
+    <View style={styles.screen}>
       <KeyboardAvoidingView
-        style={styles.keyboardContainer}
-        behavior={
-          Platform.OS === "ios" ? "padding" : "height"
-        }
+        style={styles.flex}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
         <ScrollView
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
-          {/* TIPO DE CADASTRO */}
+          {/* BOAS-VINDAS */}
+          <View style={styles.hero}>
+            <Text style={styles.heroTitle}>Olá, seja bem-vindo!</Text>
+            <Text style={styles.heroText}>
+              {organizacao
+                ? "Você está se cadastrando como organização"
+                : "Você está se cadastrando como cliente"}
+            </Text>
+          </View>
 
-          <View style={styles.tipoContainer}>
+          {/* TOGGLE CLIENTE / ORGANIZAÇÃO */}
+          <View style={styles.toggle}>
             <TouchableOpacity
-              style={[
-                styles.tipoBotao,
-                tipoCadastro === "organizacao" &&
-                  styles.tipoSelecionado,
-              ]}
-              onPress={() =>
-                setTipoCadastro("organizacao")
-              }
+              style={[styles.toggleBtn, !organizacao && styles.toggleActive]}
+              onPress={() => trocarTipo("cliente")}
+              activeOpacity={0.8}
             >
+              <Feather
+                name="user"
+                size={15}
+                color={!organizacao ? VINHO : "#fff"}
+              />
               <Text
                 style={[
-                  styles.tipoTexto,
-                  tipoCadastro === "organizacao" &&
-                    styles.tipoTextoSelecionado,
-                ]}
-              >
-                Organização
-              </Text>
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[
-                styles.tipoBotao,
-                tipoCadastro === "cliente" &&
-                  styles.tipoSelecionado,
-              ]}
-              onPress={() =>
-                setTipoCadastro("cliente")
-              }
-            >
-              <Text
-                style={[
-                  styles.tipoTexto,
-                  tipoCadastro === "cliente" &&
-                    styles.tipoTextoSelecionado,
+                  styles.toggleText,
+                  !organizacao && styles.toggleTextActive,
                 ]}
               >
                 Cliente
               </Text>
             </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.toggleBtn, organizacao && styles.toggleActive]}
+              onPress={() => trocarTipo("organizacao")}
+              activeOpacity={0.8}
+            >
+              <Feather
+                name="briefcase"
+                size={15}
+                color={organizacao ? VINHO : "#fff"}
+              />
+              <Text
+                style={[
+                  styles.toggleText,
+                  organizacao && styles.toggleTextActive,
+                ]}
+              >
+                Organização
+              </Text>
+            </TouchableOpacity>
           </View>
 
           {/* CARD */}
+          <View style={styles.card}>
+            <Text style={styles.cardTitle}>
+              {organizacao ? "Cadastro de Organização" : "Cadastro de Cliente"}
+            </Text>
 
-          <View
-            style={[
-              styles.card,
-              tipoCadastro === "cliente"
-                ? styles.cardCliente
-                : styles.cardOrganizacao,
-            ]}
-          >
-            {/* LOGO */}
-
-            <Image
-              source={require("../../assets/logoTaDaKi.webp")}
-              style={styles.logo}
-              resizeMode="contain"
-            />
-
-            {/* ================================= */}
-            {/* ORGANIZAÇÃO */}
-            {/* ================================= */}
-
-            {tipoCadastro === "organizacao" ? (
+            {organizacao ? (
               <>
-                {/* Nome */}
+                <Field
+                  icon="briefcase"
+                  placeholder="Nome da organização"
+                  value={nomeOrganizacao}
+                  onChangeText={setNomeOrganizacao}
+                  autoCapitalize="words"
+                />
 
-                <View style={styles.campo}>
-                  <Text style={styles.label}>
-                    Nome Organização:
-                  </Text>
+                <Field
+                  icon="user"
+                  placeholder="Usuário"
+                  value={usuarioOrganizacao}
+                  onChangeText={setUsuarioOrganizacao}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
 
-                  <TextInput
-                    value={nomeOrganizacao}
-                    onChangeText={setNomeOrganizacao}
-                    style={styles.input}
-                    autoCapitalize="words"
-                    placeholder="Digite o nome da organização"
-                    placeholderTextColor="#999"
-                  />
-                </View>
+                <Field
+                  icon="mail"
+                  placeholder="E-mail"
+                  value={email}
+                  onChangeText={setEmail}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
+
+                <Field
+                  icon="phone"
+                  placeholder="(11) 99999-9999"
+                  value={telefone}
+                  onChangeText={(t) => setTelefone(formatarTelefone(t))}
+                  keyboardType="phone-pad"
+                  maxLength={15}
+                />
+
+                <PasswordField
+                  placeholder="Senha"
+                  value={senhaOrganizacao}
+                  onChangeText={setSenhaOrganizacao}
+                />
+
+                <PasswordField
+                  placeholder="Confirmar senha"
+                  value={confirmacaoSenhaOrganizacao}
+                  onChangeText={setConfirmacaoSenhaOrganizacao}
+                />
 
                 {/* CPF / CNPJ */}
-
-                <View style={styles.campo}>
-                  <Text style={styles.label}>
-                    Documento:
-                  </Text>
-
-                  <View style={styles.documentoContainer}>
-                    <TouchableOpacity
-                      style={[
-                        styles.documentoBotao,
-                        tipoDocumento === "CPF" &&
-                          styles.documentoSelecionado,
-                      ]}
-                      onPress={() => {
-                        setTipoDocumento("CPF");
-                        setCnpj("");
-                      }}
-                    >
-                      <Text
-                        style={[
-                          styles.documentoTexto,
-                          tipoDocumento === "CPF" &&
-                            styles.documentoTextoSelecionado,
-                        ]}
-                      >
-                        CPF
-                      </Text>
-                    </TouchableOpacity>
-
-                    <TouchableOpacity
-                      style={[
-                        styles.documentoBotao,
-                        tipoDocumento === "CNPJ" &&
-                          styles.documentoSelecionado,
-                      ]}
-                      onPress={() => {
-                        setTipoDocumento("CNPJ");
-                        setCpf("");
-                      }}
-                    >
-                      <Text
-                        style={[
-                          styles.documentoTexto,
-                          tipoDocumento === "CNPJ" &&
-                            styles.documentoTextoSelecionado,
-                        ]}
-                      >
-                        CNPJ
-                      </Text>
-                    </TouchableOpacity>
-                  </View>
-
-                  {tipoDocumento === "CPF" ? (
-                    <TextInput
-                      value={cpf}
-                      onChangeText={(texto) =>
-                        setCpf(formatarCPF(texto))
-                      }
-                      style={styles.input}
-                      keyboardType="numeric"
-                      placeholder="000.000.000-00"
-                      placeholderTextColor="#999"
-                      maxLength={14}
-                    />
-                  ) : (
-                    <TextInput
-                      value={cnpj}
-                      onChangeText={(texto) =>
-                        setCnpj(formatarCNPJ(texto))
-                      }
-                      style={styles.input}
-                      keyboardType="numeric"
-                      placeholder="00.000.000/0000-00"
-                      placeholderTextColor="#999"
-                      maxLength={18}
-                    />
-                  )}
-                </View>
-
-                {/* E-mail */}
-
-                <View style={styles.campo}>
-                  <Text style={styles.label}>
-                    E-mail:
-                  </Text>
-
-                  <TextInput
-                    value={email}
-                    onChangeText={setEmail}
-                    style={styles.input}
-                    keyboardType="email-address"
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    placeholder="exemplo@gmail.com"
-                    placeholderTextColor="#999"
-                  />
-                </View>
-
-                {/* Telefone */}
-
-                <View style={styles.campo}>
-                  <Text style={styles.label}>
-                    Telefone:
-                  </Text>
-
-                  <TextInput
-                    value={telefone}
-                    onChangeText={setTelefone}
-                    style={styles.input}
-                    keyboardType="phone-pad"
-                    placeholder="(19) 99999-9999"
-                    placeholderTextColor="#999"
-                  />
-                </View>
-
-                {/* CEP */}
-
-                <View style={styles.campo}>
-                  <Text style={styles.label}>
-                    CEP:
-                  </Text>
-
-                  <TextInput
-                    value={cep}
-                    onChangeText={setCep}
-                    style={styles.input}
-                    keyboardType="numeric"
-                    placeholder="00000-000"
-                    placeholderTextColor="#999"
-                  />
-                </View>
-
-                {/* Número */}
-
-                <View style={styles.campo}>
-                  <Text style={styles.label}>
-                    Número:
-                  </Text>
-
-                  <TextInput
-                    value={numero}
-                    onChangeText={setNumero}
-                    style={styles.input}
-                    keyboardType="numeric"
-                    placeholder="123"
-                    placeholderTextColor="#999"
-                  />
-                </View>
-
-                {/* Usuário */}
-
-                <View style={styles.campo}>
-                  <Text style={styles.label}>
-                    Usuário:
-                  </Text>
-
-                  <TextInput
-                    value={usuarioOrganizacao}
-                    onChangeText={setUsuarioOrganizacao}
-                    style={styles.input}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    placeholder="Digite seu usuário"
-                    placeholderTextColor="#999"
-                  />
-                </View>
-
-                {/* Senha */}
-
-                <View style={styles.campo}>
-                  <Text style={styles.label}>
-                    Senha:
-                  </Text>
-
-                  <TextInput
-                    value={senhaOrganizacao}
-                    onChangeText={setSenhaOrganizacao}
-                    style={styles.input}
-                    secureTextEntry
-                    placeholder="Digite sua senha"
-                    placeholderTextColor="#999"
-                  />
-                </View>
-
-                {/* Confirmação Senha */}
-
-                <View style={styles.campo}>
-                  <Text style={styles.label}>
-                    Confirmação Senha:
-                  </Text>
-
-                  <TextInput
-                    value={confirmacaoSenhaOrganizacao}
-                    onChangeText={setConfirmacaoSenhaOrganizacao}
-                    style={styles.input}
-                    secureTextEntry
-                    placeholder="Confirme sua senha"
-                    placeholderTextColor="#999"
-                  />
-                </View>
-
-                {/* Área de atuação */}
-
-                <View style={styles.campo}>
-                  <Text style={styles.label}>
-                    Área de atuação:
-                  </Text>
+                <View style={styles.documentoToggle}>
+                  <TouchableOpacity
+                    style={[
+                      styles.documentoCard,
+                      tipoDocumento === "cpf" && styles.documentoAtivo,
+                    ]}
+                    onPress={() => {
+                      setTipoDocumento("cpf");
+                      setDocumento("");
+                    }}
+                    activeOpacity={0.8}
+                  >
+                    <View style={styles.documentoIcone}>
+                      <Feather name="user" size={16} color={VINHO} />
+                    </View>
+                    <View style={styles.documentoInfo}>
+                      <Text style={styles.documentoTitulo}>CPF</Text>
+                      <Text style={styles.documentoSub}>Pessoa Física</Text>
+                    </View>
+                    {tipoDocumento === "cpf" && (
+                      <Feather name="check" size={16} color={VINHO} />
+                    )}
+                  </TouchableOpacity>
 
                   <TouchableOpacity
-                    style={styles.dropdown}
-                    onPress={() =>
-                      setMostrarDropdown(true)
-                    }
-                    activeOpacity={0.7}
+                    style={[
+                      styles.documentoCard,
+                      tipoDocumento === "cnpj" && styles.documentoAtivo,
+                    ]}
+                    onPress={() => {
+                      setTipoDocumento("cnpj");
+                      setDocumento("");
+                    }}
+                    activeOpacity={0.8}
                   >
-                    <Text
-                      style={[
-                        styles.dropdownTexto,
-                        !areaSelecionada &&
-                          styles.dropdownPlaceholder,
-                      ]}
-                    >
-                      {areaSelecionada
-                        ? areaSelecionada.descricao
-                        : "Selecione uma área"}
-                    </Text>
-
-                    <Text style={styles.seta}>
-                      ▼
-                    </Text>
+                    <View style={styles.documentoIcone}>
+                      <Feather name="briefcase" size={16} color={VINHO} />
+                    </View>
+                    <View style={styles.documentoInfo}>
+                      <Text style={styles.documentoTitulo}>CNPJ</Text>
+                      <Text style={styles.documentoSub}>Empresa</Text>
+                    </View>
+                    {tipoDocumento === "cnpj" && (
+                      <Feather name="check" size={16} color={VINHO} />
+                    )}
                   </TouchableOpacity>
                 </View>
 
-                {/* Botão */}
+                <Field
+                  icon="credit-card"
+                  placeholder={
+                    tipoDocumento === "cnpj"
+                      ? "00.000.000/0000-00"
+                      : "000.000.000-00"
+                  }
+                  value={documento}
+                  onChangeText={(t) =>
+                    setDocumento(formatarDocumento(t, tipoDocumento))
+                  }
+                  keyboardType="numeric"
+                  maxLength={tipoDocumento === "cnpj" ? 18 : 14}
+                />
+                <Text style={styles.ajuda}>
+                  Informe seu {tipoDocumento.toUpperCase()} (apenas números).
+                </Text>
 
+                {/* Área de atuação */}
                 <TouchableOpacity
-                  style={styles.botaoCadastrar}
-                  onPress={cadastrar}
-                  activeOpacity={0.8}
+                  style={styles.inputContainer}
+                  onPress={() => setMostrarDropdown(true)}
+                  activeOpacity={0.7}
                 >
-                  <Text style={styles.textoCadastrar}>
-                    Cadastrar
+                  <Feather
+                    name="tag"
+                    size={18}
+                    color="#8a8a8a"
+                    style={styles.inputIcon}
+                  />
+                  <Text
+                    style={[
+                      styles.dateText,
+                      !areaSelecionada && styles.placeholderText,
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {areaSelecionada
+                      ? areaSelecionada.descricao
+                      : "Área de atuação"}
                   </Text>
+                  <Feather name="chevron-down" size={18} color="#8a8a8a" />
                 </TouchableOpacity>
+
+                {/* Data de criação */}
+                <DateField
+                  value={dataCriacao}
+                  placeholder="Data de criação"
+                  onPress={() => setCalendario("criacao")}
+                />
+                <Text style={styles.ajuda}>
+                  Selecione a data de criação da organização
+                </Text>
               </>
             ) : (
               <>
-                {/* ================================= */}
-                {/* CLIENTE */}
-                {/* ================================= */}
+                <Field
+                  icon="user"
+                  placeholder="Nome completo"
+                  value={nomeCompleto}
+                  onChangeText={setNomeCompleto}
+                  autoCapitalize="words"
+                />
 
-                {/* Nome */}
+                <Field
+                  icon="user"
+                  placeholder="Usuário"
+                  value={usuario}
+                  onChangeText={setUsuario}
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
 
-                <View style={styles.campo}>
-                  <Text style={styles.label}>
-                    Nome Completo:
-                  </Text>
+                <Field
+                  icon="mail"
+                  placeholder="E-mail"
+                  value={email}
+                  onChangeText={setEmail}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                  autoCorrect={false}
+                />
 
-                  <TextInput
-                    value={nomeCompleto}
-                    onChangeText={setNomeCompleto}
-                    style={styles.input}
-                    autoCapitalize="words"
-                    placeholder="Digite seu nome completo"
-                    placeholderTextColor="#999"
-                  />
-                </View>
+                <PasswordField
+                  placeholder="Senha"
+                  value={senha}
+                  onChangeText={setSenha}
+                />
 
-                {/* E-mail */}
+                <PasswordField
+                  placeholder="Confirmar senha"
+                  value={confirmacaoSenha}
+                  onChangeText={setConfirmacaoSenha}
+                />
 
-                <View style={styles.campo}>
-                  <Text style={styles.label}>
-                    E-mail:
-                  </Text>
-
-                  <TextInput
-                    value={email}
-                    onChangeText={setEmail}
-                    style={styles.input}
-                    keyboardType="email-address"
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    placeholder="exemplo@gmail.com"
-                    placeholderTextColor="#999"
-                  />
-                </View>
-
-                {/* Telefone */}
-
-                <View style={styles.campo}>
-                  <Text style={styles.label}>
-                    Telefone:
-                  </Text>
-
-                  <TextInput
-                    value={telefone}
-                    onChangeText={setTelefone}
-                    style={styles.input}
-                    keyboardType="phone-pad"
-                    placeholder="(19) 99999-9999"
-                    placeholderTextColor="#999"
-                  />
-                </View>
-
-                {/* CEP */}
-
-                <View style={styles.campo}>
-                  <Text style={styles.label}>
-                    CEP:
-                  </Text>
-
-                  <TextInput
-                    value={cep}
-                    onChangeText={setCep}
-                    style={styles.input}
-                    keyboardType="numeric"
-                    placeholder="00000-000"
-                    placeholderTextColor="#999"
-                  />
-                </View>
-
-                {/* Número */}
-
-                <View style={styles.campo}>
-                  <Text style={styles.label}>
-                    Número:
-                  </Text>
-
-                  <TextInput
-                    value={numero}
-                    onChangeText={setNumero}
-                    style={styles.input}
-                    keyboardType="numeric"
-                    placeholder="123"
-                    placeholderTextColor="#999"
-                  />
-                </View>
-
-                {/* Data de nascimento */}
-
-                <View style={styles.campo}>
-                  <Text style={styles.label}>
-                    Data Nascimento:
-                  </Text>
-
-                  <TouchableOpacity
-                    style={styles.input}
-                    onPress={abrirCalendario}
-                    activeOpacity={0.7}
-                  >
-                    <Text
-                      style={[
-                        styles.dataTexto,
-                        !dataNascimento &&
-                          styles.placeholderData,
-                      ]}
-                    >
-                      {dataNascimento
-                        ? formatarData(dataNascimento)
-                        : "Selecione sua data de nascimento"}
-                    </Text>
-                  </TouchableOpacity>
-                </View>
-
-                {mostrarCalendario && (
-                  <DateTimePicker
-                    value={
-                      dataNascimento ||
-                      new Date(2000, 0, 1)
-                    }
-                    mode="date"
-                    display={
-                      Platform.OS === "android"
-                        ? "calendar"
-                        : "spinner"
-                    }
-                    maximumDate={new Date()}
-                    onChange={alterarData}
-                  />
-                )}
-
-                {/* Usuário */}
-
-                <View style={styles.campo}>
-                  <Text style={styles.label}>
-                    Usuário:
-                  </Text>
-
-                  <TextInput
-                    value={usuario}
-                    onChangeText={setUsuario}
-                    style={styles.input}
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                    placeholder="Digite seu usuário"
-                    placeholderTextColor="#999"
-                  />
-                </View>
-
-                {/* Senha */}
-
-                <View style={styles.campo}>
-                  <Text style={styles.label}>
-                    Senha:
-                  </Text>
-
-                  <TextInput
-                    value={senha}
-                    onChangeText={setSenha}
-                    style={styles.input}
-                    secureTextEntry
-                    placeholder="Digite sua senha"
-                    placeholderTextColor="#999"
-                  />
-                </View>
-
-                {/* Confirmação */}
-
-                <View style={styles.campo}>
-                  <Text style={styles.label}>
-                    Confirmação Senha:
-                  </Text>
-
-                  <TextInput
-                    value={confirmacaoSenha}
-                    onChangeText={setConfirmacaoSenha}
-                    style={styles.input}
-                    secureTextEntry
-                    placeholder="Confirme sua senha"
-                    placeholderTextColor="#999"
-                  />
-                </View>
-
-                {/* Botão */}
-
-                <TouchableOpacity
-                  style={styles.botaoCadastrar}
-                  onPress={cadastrar}
-                  activeOpacity={0.8}
-                >
-                  <Text style={styles.textoCadastrar}>
-                    Cadastrar
-                  </Text>
-                </TouchableOpacity>
+                <DateField
+                  value={dataNascimento}
+                  placeholder="Data de nascimento"
+                  onPress={() => setCalendario("nascimento")}
+                />
               </>
             )}
+
+            {calendario && (
+              <DateTimePicker
+                value={
+                  (calendario === "nascimento" ? dataNascimento : dataCriacao) ||
+                  (calendario === "nascimento"
+                    ? new Date(2000, 0, 1)
+                    : new Date())
+                }
+                mode="date"
+                display={Platform.OS === "android" ? "calendar" : "spinner"}
+                maximumDate={new Date()}
+                onChange={alterarData}
+              />
+            )}
+
+            {errorMessage && <Text style={styles.error}>{errorMessage}</Text>}
+
+            {/* Botão */}
+            <TouchableOpacity
+              style={[styles.button, loading && styles.buttonDisabled]}
+              onPress={cadastrar}
+              activeOpacity={0.85}
+              disabled={loading}
+            >
+              {loading ? (
+                <ActivityIndicator color="#fff" />
+              ) : (
+                <View style={styles.buttonContent}>
+                  <Text style={styles.buttonText}>Cadastrar</Text>
+                  <Feather name="arrow-right" size={17} color="#fff" />
+                </View>
+              )}
+            </TouchableOpacity>
+
+            {/* Já possui conta */}
+            <View style={styles.loginLink}>
+              <Text style={styles.loginLinkText}>Já possui uma conta?</Text>
+              <TouchableOpacity
+                onPress={() => navigation.navigate("Login")}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.loginLinkAction}>Entrar</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* MODAL */}
-
+      {/* MODAL ÁREA DE ATUAÇÃO */}
       <Modal
         visible={mostrarDropdown}
         transparent
         animationType="fade"
-        onRequestClose={() =>
-          setMostrarDropdown(false)
-        }
+        onRequestClose={() => setMostrarDropdown(false)}
       >
         <TouchableOpacity
           style={styles.modalFundo}
           activeOpacity={1}
-          onPress={() =>
-            setMostrarDropdown(false)
-          }
+          onPress={() => setMostrarDropdown(false)}
         >
           <View style={styles.dropdownModal}>
-            <Text style={styles.tituloDropdown}>
+            <Text style={styles.dropdownTitulo}>
               Selecione a área de atuação
             </Text>
 
@@ -991,230 +765,287 @@ export default function CadastroScreen({ navigation }: Props) {
               style={styles.listaAreas}
               showsVerticalScrollIndicator={false}
             >
-              {areasAtuacao.map((area) => (
-                <TouchableOpacity
-                  key={area.id_area_atuacao}
-                  style={[
-                    styles.opcaoArea,
-                    areaSelecionada?.id_area_atuacao ===
-                      area.id_area_atuacao &&
-                      styles.opcaoAreaSelecionada,
-                  ]}
-                  onPress={() => {
-                    setAreaSelecionada(area);
-                    setMostrarDropdown(false);
-                  }}
-                >
-                  <Text
+              {areasAtuacao.map((area) => {
+                const selecionada =
+                  areaSelecionada?.id_area_atuacao === area.id_area_atuacao;
+
+                return (
+                  <TouchableOpacity
+                    key={area.id_area_atuacao}
                     style={[
-                      styles.opcaoAreaTexto,
-                      areaSelecionada?.id_area_atuacao ===
-                        area.id_area_atuacao &&
-                        styles.opcaoAreaTextoSelecionada,
+                      styles.opcaoArea,
+                      selecionada && styles.opcaoAreaSelecionada,
                     ]}
+                    onPress={() => {
+                      setAreaSelecionada(area);
+                      setMostrarDropdown(false);
+                    }}
                   >
-                    {area.descricao}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+                    <Text
+                      style={[
+                        styles.opcaoAreaTexto,
+                        selecionada && styles.opcaoAreaTextoSelecionada,
+                      ]}
+                    >
+                      {area.descricao}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })}
             </ScrollView>
 
             <TouchableOpacity
-              style={styles.botaoFecharDropdown}
-              onPress={() =>
-                setMostrarDropdown(false)
-              }
+              style={styles.botaoFechar}
+              onPress={() => setMostrarDropdown(false)}
             >
-              <Text style={styles.textoFecharDropdown}>
-                Fechar
-              </Text>
+              <Text style={styles.botaoFecharTexto}>Fechar</Text>
             </TouchableOpacity>
           </View>
         </TouchableOpacity>
       </Modal>
-    </ImageBackground>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  background: {
+  screen: {
     flex: 1,
+    backgroundColor: VINHO,
   },
 
-  keyboardContainer: {
+  flex: {
     flex: 1,
   },
 
   scrollContent: {
     flexGrow: 1,
+    paddingTop: 100,
+    paddingBottom: 32,
+    paddingHorizontal: 20,
+  },
+
+  /* HERO */
+  hero: {
     alignItems: "center",
-    paddingTop: 52,
-    paddingBottom: 25,
+    marginBottom: 18,
   },
 
-  // =========================
-  // TIPO DE CADASTRO
-  // =========================
-
-  tipoContainer: {
-    width: 180,
-    height: 27,
-    flexDirection: "row",
-    backgroundColor: "#ffffff",
-    borderRadius: 20,
-    overflow: "hidden",
-    marginBottom: 28,
-  },
-
-  tipoBotao: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 20,
-  },
-
-  tipoSelecionado: {
-    backgroundColor: "#acd0b3",
-  },
-
-  tipoTexto: {
-    fontFamily: "serif",
-    fontSize: 12,
-    color: "#777",
-  },
-
-  tipoTextoSelecionado: {
-    color: "#ffffff",
-  },
-
-  // =========================
-  // CARD
-  // =========================
-
-  card: {
-    width: "88%",
-    backgroundColor: "rgba(255, 255, 255, 0.78)",
-    borderRadius: 32,
-    alignItems: "center",
-    paddingHorizontal: 22,
-  },
-
-  cardCliente: {
-    minHeight: 600,
-    paddingTop: 13,
-    paddingBottom: 20,
-  },
-
-  cardOrganizacao: {
-    minHeight: 850,
-    paddingTop: 13,
-    paddingBottom: 20,
-  },
-
-  // =========================
-  // LOGO
-  // =========================
-
-  logo: {
-    width: 145,
-    height: 70,
-    marginBottom: 12,
-  },
-
-  // =========================
-  // CAMPOS
-  // =========================
-
-  campo: {
-    width: "100%",
-    marginBottom: 10,
-  },
-
-  label: {
-    fontFamily: "serif",
-    fontSize: 13,
-    color: "#000",
-    marginLeft: 8,
+  heroTitle: {
+    color: "#fff",
+    fontSize: 26,
+    fontWeight: "700",
     marginBottom: 6,
   },
 
-  input: {
-    width: "100%",
-    height: 43,
-    backgroundColor: "#ffffff",
-    borderRadius: 25,
-    paddingHorizontal: 17,
-    fontSize: 15,
-    color: "#000",
-  },
-
-  // =========================
-  // CPF / CNPJ
-  // =========================
-
-  documentoContainer: {
-    width: "100%",
-    height: 35,
-    flexDirection: "row",
-    backgroundColor: "#ffffff",
-    borderRadius: 20,
-    marginBottom: 8,
-    overflow: "hidden",
-  },
-
-  documentoBotao: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-
-  documentoSelecionado: {
-    backgroundColor: "#acd0b3",
-  },
-
-  documentoTexto: {
-    fontFamily: "serif",
-    fontSize: 12,
-    color: "#777",
-  },
-
-  documentoTextoSelecionado: {
-    color: "#ffffff",
-  },
-
-  // =========================
-  // DROPDOWN
-  // =========================
-
-  dropdown: {
-    width: "100%",
-    height: 43,
-    backgroundColor: "#ffffff",
-    borderRadius: 25,
-    paddingHorizontal: 17,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-  },
-
-  dropdownTexto: {
-    fontSize: 15,
-    color: "#000",
-  },
-
-  dropdownPlaceholder: {
-    color: "#999",
-  },
-
-  seta: {
+  heroText: {
+    color: "rgba(255,255,255,0.85)",
     fontSize: 14,
+    textAlign: "center",
+  },
+
+  /* TOGGLE */
+  toggle: {
+    flexDirection: "row",
+    alignSelf: "center",
+    backgroundColor: "rgba(255,255,255,0.14)",
+    borderRadius: 24,
+    padding: 4,
+    marginBottom: 18,
+  },
+
+  toggleBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingVertical: 8,
+    paddingHorizontal: 18,
+    borderRadius: 20,
+  },
+
+  toggleActive: {
+    backgroundColor: "#fff",
+  },
+
+  toggleText: {
+    color: "#fff",
+    fontSize: 13,
+    fontWeight: "600",
+  },
+
+  toggleTextActive: {
+    color: VINHO,
+  },
+
+  /* CARD */
+  card: {
+    backgroundColor: "#fff",
+    borderRadius: 28,
+    paddingHorizontal: 22,
+    paddingTop: 24,
+    paddingBottom: 24,
+    shadowColor: "#000",
+    shadowOpacity: 0.25,
+    shadowRadius: 20,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 10,
+  },
+
+  cardTitle: {
+    fontSize: 20,
+    fontWeight: "700",
+    color: "#222",
+    textAlign: "center",
+    marginBottom: 18,
+  },
+
+  /* CAMPOS */
+  inputContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    height: 46,
+    borderRadius: 14,
+    backgroundColor: "#f4f4f5",
+    borderWidth: 1,
+    borderColor: "#e5e5e7",
+    paddingHorizontal: 14,
+    marginBottom: 12,
+  },
+
+  inputIcon: {
+    marginRight: 10,
+  },
+
+  input: {
+    flex: 1,
+    fontSize: 15,
+    color: "#333",
+    paddingVertical: 0,
+  },
+
+  dateText: {
+    flex: 1,
+    fontSize: 15,
+    color: "#333",
+  },
+
+  placeholderText: {
+    color: "#b0b0b0",
+  },
+
+  ajuda: {
+    fontSize: 11,
+    color: "#888",
+    marginTop: -6,
+    marginBottom: 12,
+    marginLeft: 6,
+  },
+
+  /* CPF / CNPJ */
+  documentoToggle: {
+    flexDirection: "row",
+    gap: 10,
+    marginBottom: 12,
+  },
+
+  documentoCard: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    borderRadius: 14,
+    backgroundColor: "#f4f4f5",
+    borderWidth: 1.5,
+    borderColor: "#e5e5e7",
+  },
+
+  documentoAtivo: {
+    borderColor: VINHO,
+    backgroundColor: "#fdf1f1",
+  },
+
+  documentoIcone: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
+    backgroundColor: "#fff",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
+  documentoInfo: {
+    flex: 1,
+  },
+
+  documentoTitulo: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#222",
+  },
+
+  documentoSub: {
+    fontSize: 10,
     color: "#777",
   },
 
-  // =========================
-  // MODAL
-  // =========================
+  /* MENSAGEM + BOTÃO */
+  error: {
+    color: "#c62828",
+    fontSize: 12,
+    marginBottom: 10,
+    marginLeft: 4,
+  },
 
+  button: {
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: VINHO,
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 6,
+    shadowColor: VINHO,
+    shadowOpacity: 0.35,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 5 },
+    elevation: 6,
+  },
+
+  buttonDisabled: {
+    opacity: 0.7,
+  },
+
+  buttonContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+
+  buttonText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "600",
+  },
+
+  loginLink: {
+    flexDirection: "row",
+    justifyContent: "center",
+    gap: 6,
+    marginTop: 18,
+  },
+
+  loginLinkText: {
+    fontSize: 14,
+    color: "#666",
+  },
+
+  loginLinkAction: {
+    fontSize: 14,
+    color: VINHO,
+    fontWeight: "700",
+  },
+
+  /* MODAL */
   modalFundo: {
     flex: 1,
     backgroundColor: "rgba(0, 0, 0, 0.45)",
@@ -1226,17 +1057,17 @@ const styles = StyleSheet.create({
   dropdownModal: {
     width: "100%",
     maxHeight: "75%",
-    backgroundColor: "#ffffff",
-    borderRadius: 25,
+    backgroundColor: "#fff",
+    borderRadius: 24,
     padding: 20,
   },
 
-  tituloDropdown: {
-    fontFamily: "serif",
-    fontSize: 18,
-    color: "#000",
+  dropdownTitulo: {
+    fontSize: 17,
+    fontWeight: "700",
+    color: "#222",
     textAlign: "center",
-    marginBottom: 15,
+    marginBottom: 14,
   },
 
   listaAreas: {
@@ -1244,76 +1075,41 @@ const styles = StyleSheet.create({
   },
 
   opcaoArea: {
-    width: "100%",
-    minHeight: 45,
-    backgroundColor: "#f5f5f5",
-    borderRadius: 15,
+    minHeight: 44,
+    backgroundColor: "#f4f4f5",
+    borderRadius: 14,
     justifyContent: "center",
     paddingHorizontal: 15,
     marginBottom: 8,
   },
 
   opcaoAreaSelecionada: {
-    backgroundColor: "#acd0b3",
+    backgroundColor: VINHO,
   },
 
   opcaoAreaTexto: {
-    fontFamily: "serif",
     fontSize: 15,
-    color: "#555",
+    color: "#444",
   },
 
   opcaoAreaTextoSelecionada: {
-    color: "#ffffff",
+    color: "#fff",
+    fontWeight: "600",
   },
 
-  botaoFecharDropdown: {
-    width: "100%",
-    height: 43,
-    backgroundColor: "#acd0b3",
-    borderRadius: 20,
-    justifyContent: "center",
+  botaoFechar: {
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 1.5,
+    borderColor: VINHO,
     alignItems: "center",
-    marginTop: 10,
+    justifyContent: "center",
+    marginTop: 8,
   },
 
-  textoFecharDropdown: {
-    fontFamily: "serif",
-    fontSize: 13,
-    color: "#000",
-  },
-
-  // =========================
-  // DATA
-  // =========================
-
-  dataTexto: {
+  botaoFecharTexto: {
     fontSize: 14,
-    color: "#000",
-    lineHeight: 43,
-  },
-
-  placeholderData: {
-    color: "#999",
-  },
-
-  // =========================
-  // BOTÃO
-  // =========================
-
-  botaoCadastrar: {
-    width: "100%",
-    height: 43,
-    backgroundColor: "#acd0b3",
-    borderRadius: 20,
-    alignItems: "center",
-    justifyContent: "center",
-    marginTop: 20,
-  },
-
-  textoCadastrar: {
-    color: "#000",
-    fontFamily: "serif",
-    fontSize: 12,
+    fontWeight: "600",
+    color: VINHO,
   },
 });

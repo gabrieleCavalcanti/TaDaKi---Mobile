@@ -161,10 +161,10 @@ export default function LoginScreen() {
     }
   }
 
-  function entrarComGoogle() {
-    // futuramente integrar login com Google (ex.: expo-auth-session)
-    Alert.alert("Em breve", "Login com Google ainda não está disponível.");
-  }
+  // function entrarComGoogle() {
+  //   // futuramente integrar login com Google (ex.: expo-auth-session)
+  //   Alert.alert("Em breve", "Login com Google ainda não está disponível.");
+  // }
 
   return (
     <KeyboardAvoidingView
@@ -341,14 +341,14 @@ export default function LoginScreen() {
             </View>
 
             {/* Google */}
-            <TouchableOpacity
+            {/* <TouchableOpacity
               style={styles.googleButton}
               onPress={entrarComGoogle}
               activeOpacity={0.8}
             >
               <Text style={styles.googleG}>G</Text>
               <Text style={styles.googleText}>Continuar com o Google</Text>
-            </TouchableOpacity>
+            </TouchableOpacity> */}
 
             {/* Cadastro */}
             <View style={styles.register}>
@@ -659,36 +659,36 @@ const styles = StyleSheet.create({
   },
 
   /* GOOGLE */
-  googleButton: {
-    height: 46,
-    borderRadius: 23,
-    borderWidth: 1,
-    borderColor: "#dadce0",
-    backgroundColor: "#fff",
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 10,
-  },
+  // googleButton: {
+  //   height: 46,
+  //   borderRadius: 23,
+  //   borderWidth: 1,
+  //   borderColor: "#dadce0",
+  //   backgroundColor: "#fff",
+  //   flexDirection: "row",
+  //   alignItems: "center",
+  //   justifyContent: "center",
+  //   gap: 10,
+  // },
 
-  googleG: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#4285F4",
-  },
+  // googleG: {
+  //   fontSize: 18,
+  //   fontWeight: "700",
+  //   color: "#4285F4",
+  // },
 
-  googleText: {
-    fontSize: 14,
-    fontWeight: "500",
-    color: "#3c4043",
-  },
+  // googleText: {
+  //   fontSize: 14,
+  //   fontWeight: "500",
+  //   color: "#3c4043",
+  // },
 
   /* CADASTRO */
   register: {
     flexDirection: "row",
     justifyContent: "center",
     gap: 6,
-    marginTop: 20,
+    marginTop: 3,
   },
 
   registerText: {
